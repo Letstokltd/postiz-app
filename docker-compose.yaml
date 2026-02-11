@@ -4,22 +4,24 @@ services:
     container_name: postiz
     restart: always
     environment:
-      # === Required Settings
+      # === Required Settings (use 4007 to match official Postiz setup)
       MAIN_URL: 'http://localhost:4007'
       FRONTEND_URL: 'http://localhost:4007'
       NEXT_PUBLIC_BACKEND_URL: 'http://localhost:4007/api'
-      JWT_SECRET: 'random string that is unique to every install - just type random characters here!'
+      JWT_SECRET: 'asdasdasdas21312asdasdasd213123sadasdasdas23232'
       DATABASE_URL: 'postgresql://postiz-user:postiz-password@postiz-postgres:5432/postiz-db-local'
       REDIS_URL: 'redis://postiz-redis:6379'
       BACKEND_INTERNAL_URL: 'http://localhost:3000'
       TEMPORAL_ADDRESS: "temporal:7233"
       IS_GENERAL: 'true'
       DISABLE_REGISTRATION: 'false'
+      RUN_CRON: 'true'
 
       # === Storage Settings
       STORAGE_PROVIDER: 'local'
       UPLOAD_DIRECTORY: '/uploads'
       NEXT_PUBLIC_UPLOAD_DIRECTORY: '/uploads'
+      NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY: '/uploads'
 
       # === Cloudflare (R2) Settings
       # STORAGE_PROVIDER: 'cloudflare'
@@ -94,7 +96,7 @@ services:
       STRIPE_SIGNING_KEY_CONNECT: ''
 
       # === Developer Settings
-      NX_ADD_PLUGINS: false
+      NX_ADD_PLUGINS: 'false'
 
       # === Short Link Service Settings (Optional - leave blank if unused)
       # DUB_TOKEN: ""
@@ -108,6 +110,8 @@ services:
       # LINK_DRIP_API_ENDPOINT: "https://api.linkdrip.com/v1/"
       # LINK_DRIP_SHORT_LINK_DOMAIN: "dripl.ink"
 
+    # Wait for Temporal before starting backend (backend blocks on Temporal connection)
+    command: ["sh", "-c", "echo 'Waiting 75s for Temporal to initialize...' && sleep 75 && nginx && pnpm run pm2"]
     volumes:
       - postiz-config:/config/
       - postiz-uploads:/uploads/
