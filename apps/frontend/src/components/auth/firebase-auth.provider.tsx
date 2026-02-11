@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import {
   getAuth,
@@ -10,6 +10,7 @@ import {
   onAuthStateChanged,
 } from 'firebase/auth';
 import { LoadingComponent } from '@gitroom/frontend/components/layout/loading';
+import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
 
 /**
  * Firebase auth provider for Postiz - authenticates users directly in Postiz
@@ -17,9 +18,12 @@ import { LoadingComponent } from '@gitroom/frontend/components/layout/loading';
  * Postiz session and redirects to dashboard.
  */
 export function FirebaseAuthProvider() {
+  const fetchApi = useFetch();
   const [auth, setAuth] = useState<ReturnType<typeof getAuth> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exchanging, setExchanging] = useState(false);
+  const exchangedRef = useRef(false);
 
   useEffect(() => {
     const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
@@ -52,44 +56,59 @@ export function FirebaseAuthProvider() {
     setLoading(false);
   }, []);
 
-  const exchangeTokenAndRedirect = useCallback(async (user: User) => {
-    if (!user.emailVerified) {
-      setError(
-        'Please verify your email before signing in. Check your inbox for the verification link.'
+  const exchangeTokenAndRedirect = useCallback(
+    async (user: User) => {
+      if (exchangedRef.current) return;
+      exchangedRef.current = true;
+      setExchanging(true);
+      setError(null);
+
+      // Google/social accounts are pre-verified; only require verification for email/password
+      const isSocialProvider = user.providerData?.some(
+        (p) => p.providerId === 'google.com' || p.providerId?.includes('.com')
       );
-      return;
-    }
-
-    try {
-      const token = await user.getIdToken();
-      const apiUrl =
-        process.env.NEXT_PUBLIC_BACKEND_URL || '';
-      const res = await fetch(`${apiUrl}/auth/firebase-sso`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-        credentials: 'include',
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || 'Sign in failed');
+      if (!isSocialProvider && !user.emailVerified) {
+        setError(
+          'Please verify your email before signing in. Check your inbox for the verification link.'
+        );
+        exchangedRef.current = false;
+        setExchanging(false);
+        return;
       }
 
-      window.location.href = '/launches';
-    } catch (e) {
-      setError(
-        (e instanceof Error ? e.message : 'Sign in failed') +
-          ' Please try again.'
-      );
-    }
-  }, []);
+      try {
+        const token = await user.getIdToken();
+        const res = await fetchApi('/auth/firebase-sso', {
+          method: 'POST',
+          body: JSON.stringify({ token }),
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Sign in failed');
+        }
+
+        window.location.href = '/launches';
+      } catch (e) {
+        exchangedRef.current = false;
+        setExchanging(false);
+        const msg =
+          e instanceof Error ? e.message : 'Sign in failed';
+        setError(
+          msg.includes('Failed to fetch') || msg.includes('NetworkError')
+            ? 'Could not reach the server. Check your connection and try again.'
+            : msg + ' Please try again.'
+        );
+      }
+    },
+    [fetchApi]
+  );
 
   useEffect(() => {
     if (!auth) return;
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
+      if (user && !exchangedRef.current) {
         exchangeTokenAndRedirect(user);
       }
     });
@@ -97,25 +116,38 @@ export function FirebaseAuthProvider() {
   }, [auth, exchangeTokenAndRedirect]);
 
   const handleGoogleSignIn = useCallback(async () => {
-    if (!auth) return;
+    if (!auth || exchanging) return;
     setError(null);
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       await signInWithPopup(auth, provider);
-      // onAuthStateChanged will handle redirect
-    } catch (e) {
-      const msg =
-        e instanceof Error ? e.message : 'Google sign-in failed. Please try again.';
-      setError(msg);
+      // onAuthStateChanged will handle exchange and redirect
+    } catch (e: unknown) {
+      const err = e as { code?: string; message?: string };
+      const code = err?.code || '';
+      const msg = err?.message || 'Google sign-in failed';
+      if (code === 'auth/unauthorized-domain') {
+        setError(
+          'This domain is not authorized for Firebase. Add it in Firebase Console → Authentication → Settings → Authorized domains.'
+        );
+      } else if (code === 'auth/popup-blocked') {
+        setError('Sign-in popup was blocked. Please allow popups and try again.');
+      } else if (code === 'auth/popup-closed-by-user') {
+        setError(null);
+      } else {
+        setError(msg + ' Please try again.');
+      }
     }
-  }, [auth]);
+  }, [auth, exchanging]);
 
-  if (loading) {
+  if (loading || exchanging) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 p-8">
         <LoadingComponent />
-        <p className="text-sm text-gray-400">Loading...</p>
+        <p className="text-sm text-gray-400">
+          {exchanging ? 'Signing you in...' : 'Loading...'}
+        </p>
       </div>
     );
   }
@@ -148,7 +180,8 @@ export function FirebaseAuthProvider() {
       <button
         type="button"
         onClick={handleGoogleSignIn}
-        className="flex items-center justify-center gap-3 w-full max-w-md h-[52px] rounded-[10px] bg-white border border-gray-200 hover:bg-gray-50 text-[#0E0E0E] font-medium transition-colors"
+        disabled={exchanging}
+        className="flex items-center justify-center gap-3 w-full max-w-md h-[52px] rounded-[10px] bg-white border border-gray-200 hover:bg-gray-50 text-[#0E0E0E] font-medium transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
