@@ -26,7 +26,7 @@ COPY var/docker/nginx.conf /etc/nginx/nginx.conf
 
 # Use BuildKit cache mount for pnpm store - speeds up install on cache hits
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile
+    pnpm install
 
 # Build runs frontend, backend, orchestrator in parallel (workspace-concurrency=3)
 RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm run build
