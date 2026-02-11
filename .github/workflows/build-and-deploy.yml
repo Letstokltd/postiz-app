@@ -31,6 +31,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Set image tag
         id: meta
         run: |
@@ -58,22 +61,18 @@ jobs:
         run: |
           gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
-      - name: Build Docker image
-        run: |
-          docker build -f Dockerfile.dev \
-            -t ${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }} .
-          if [ "${{ steps.meta.outputs.tag_latest }}" = "true" ]; then
-            docker tag ${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }} \
-              ${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:latest
-          fi
-
-      - name: Push Docker image
-        if: github.event_name == 'push'
-        run: |
-          docker push ${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
-          if [ "${{ steps.meta.outputs.tag_latest }}" = "true" ]; then
-            docker push ${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:latest
-          fi
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.dev
+          push: ${{ github.event_name == 'push' }}
+          tags: |
+            ${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.tag_latest == 'true' && format('{0}/{1}/{2}/{3}:latest', env.GCP_REGISTRY, secrets.GCP_PROJECT_ID, env.IMAGE_REPO, env.IMAGE_NAME) || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
 
       - name: Image summary
         run: |
