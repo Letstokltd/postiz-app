@@ -31,8 +31,7 @@ export default function FirebaseCallbackPage() {
           const text = await res.text();
           throw new Error(text || 'Firebase SSO failed');
         }
-        // Redirect directly to Postiz dashboard (/launches)
-        window.location.href = '/launches';
+        window.location.href = '/';
       })
       .catch((e) => {
         setError(e?.message || 'Unable to sign in. Please try again.');
