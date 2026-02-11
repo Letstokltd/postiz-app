@@ -16,12 +16,10 @@ export const metadata: Metadata = {
 export default async function Auth(params: {searchParams: {provider: string}}) {
   const t = await getT();
 
-  // Firebase SSO: redirect to studio-tools for auth
+  // Firebase SSO: redirect to studio-tools for auth; auto-redirect if already logged in
   if (process.env.FIREBASE_SSO_ENABLED === 'true') {
-    const studioUrl =
-      process.env.FIREBASE_SSO_STUDIO_URL ||
-      process.env.FIREBASE_AUTH_REDIRECT_URL ||
-      'https://studio-tools.letstok.com';
+    const studioUrl = process.env.FIREBASE_SSO_STUDIO_URL || process.env.FIREBASE_AUTH_REDIRECT_URL || 'https://studio-tools.letstok.com';
+    // Use FIREBASE_AUTH_RETURN_URL (Postiz home base) so callback redirects back to Postiz, not studio-tools
     const postizBase = (
       process.env.FIREBASE_AUTH_RETURN_URL ||
       process.env.FRONTEND_URL ||
