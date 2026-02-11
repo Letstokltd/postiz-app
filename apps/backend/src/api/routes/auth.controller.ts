@@ -251,6 +251,41 @@ export class AuthController {
     }
   }
 
+  @Post('/firebase-sso')
+  async firebaseSso(
+    @Body('token') token: string,
+    @Req() req: Request,
+    @Res({ passthrough: false }) response: Response
+  ) {
+    try {
+      const getOrgFromCookie = this._authService.getOrgFromCookie(
+        req?.cookies?.org
+      );
+      const { jwt } = await this._authService.firebaseSso(token);
+
+      response.cookie('auth', jwt, {
+        domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
+        ...(!process.env.NOT_SECURED
+          ? {
+              secure: true,
+              httpOnly: true,
+              sameSite: 'none',
+            }
+          : {}),
+        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+      });
+
+      if (process.env.NOT_SECURED) {
+        response.header('auth', jwt);
+      }
+
+      response.header('onboarding', 'true');
+      return response.status(200).json({ ok: true });
+    } catch (e: any) {
+      return response.status(401).send(e?.message || 'Firebase SSO failed');
+    }
+  }
+
   @Post('/oauth/:provider/exists')
   async oauthExists(
     @Body('code') code: string,

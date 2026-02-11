@@ -19,6 +19,8 @@ export class ProvidersFactory {
         return new WalletProvider();
       case Provider.GENERIC:
         return new OauthProvider();
+      case Provider.FIREBASE:
+        throw new Error('Firebase auth uses /auth/firebase-sso endpoint, not provider flow');
     }
   }
 }

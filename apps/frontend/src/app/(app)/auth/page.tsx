@@ -6,12 +6,25 @@ import { isGeneralServerSide } from '@gitroom/helpers/utils/is.general.server.si
 import Link from 'next/link';
 import { getT } from '@gitroom/react/translation/get.translation.service.backend';
 import { LoginWithOidc } from '@gitroom/frontend/components/auth/login.with.oidc';
+import { redirect } from 'next/navigation';
+
 export const metadata: Metadata = {
   title: `${isGeneralServerSide() ? 'Postiz' : 'Gitroom'} Register`,
   description: '',
 };
+
 export default async function Auth(params: {searchParams: {provider: string}}) {
   const t = await getT();
+
+  // Firebase SSO: redirect to studio-tools for auth; auto-redirect if already logged in
+  if (process.env.FIREBASE_SSO_ENABLED === 'true') {
+    const studioUrl = process.env.FIREBASE_SSO_STUDIO_URL || process.env.FIREBASE_AUTH_REDIRECT_URL || 'https://studio-tools.letstok.com';
+    const returnTo = encodeURIComponent(
+      (process.env.FRONTEND_URL || process.env.MAIN_URL || '') + '/auth/firebase-callback'
+    );
+    redirect(`${studioUrl}/sso-redirect?returnTo=${returnTo}`);
+  }
+
   if (process.env.DISABLE_REGISTRATION === 'true') {
     const canRegister = (
       await (await internalFetch('/auth/can-register')).json()

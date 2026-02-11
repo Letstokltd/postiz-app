@@ -11,6 +11,7 @@ import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/n
 import { ForgotReturnPasswordDto } from '@gitroom/nestjs-libraries/dtos/auth/forgot-return.password.dto';
 import { EmailService } from '@gitroom/nestjs-libraries/services/email.service';
 import { NewsletterService } from '@gitroom/nestjs-libraries/newsletter/newsletter.service';
+import * as admin from 'firebase-admin';
 
 @Injectable()
 export class AuthService {
@@ -305,5 +306,69 @@ export class AuthService {
 
   private async jwt(user: User) {
     return AuthChecker.signJWT(user);
+  }
+
+  /**
+   * Firebase SSO - verify Firebase ID token and create/find Postiz user.
+   * Used when Postiz shares auth with studio-tools (dev.studio-tools / studio-tools).
+   */
+  async firebaseSso(firebaseToken: string): Promise<{ jwt: string }> {
+    if (!firebaseToken?.trim()) {
+      throw new Error('Firebase token is required');
+    }
+
+    let decodedToken: admin.auth.DecodedIdToken;
+    try {
+      if (!admin.apps.length) {
+        if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+          admin.initializeApp();
+        } else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+          const cred = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+          admin.initializeApp({ credential: admin.credential.cert(cred) });
+        } else {
+          throw new Error(
+            'Firebase not configured: set GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_SERVICE_ACCOUNT_JSON'
+          );
+        }
+      }
+      decodedToken = await admin.auth().verifyIdToken(firebaseToken);
+    } catch (e: any) {
+      throw new Error('Invalid Firebase token: ' + (e?.message || 'verification failed'));
+    }
+
+    const uid = decodedToken.uid;
+    const email = decodedToken.email || '';
+    const name = decodedToken.name || decodedToken.firebase?.identities?.email?.[0] || email;
+
+    if (!email) {
+      throw new Error('Firebase token missing email');
+    }
+
+    const existingUser = await this._userService.getUserByProvider(
+      uid,
+      Provider.FIREBASE
+    );
+    if (existingUser) {
+      return { jwt: await this.jwt(existingUser) };
+    }
+
+    if (!(await this.canRegister(Provider.FIREBASE as string))) {
+      throw new Error('Registration is disabled');
+    }
+
+    const create = await this._organizationService.createOrgAndUser(
+      {
+        company: name || email.split('@')[0],
+        email,
+        password: '',
+        provider: Provider.FIREBASE,
+        providerId: uid,
+        datafast_visitor_id: '',
+      },
+      '0.0.0.0',
+      'Firebase SSO'
+    );
+    await NewsletterService.register(email);
+    return { jwt: await this.jwt(create.users[0].user) };
   }
 }

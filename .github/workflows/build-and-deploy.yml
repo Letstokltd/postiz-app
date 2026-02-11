@@ -1,0 +1,84 @@
+# =============================================================================
+# Build and push Postiz to GCP Artifact Registry (for Kubernetes / v2-gitops)
+# =============================================================================
+#
+# Required repo secrets: GCP_PROJECT_ID, GCP_SA_KEY
+# Image: me-west1-docker.pkg.dev/letstok-292414/letstok-repository/postiz-app:sha-<SHA>
+# =============================================================================
+
+name: Build and deploy Postiz to GCP Artifact Registry
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  GCP_REGION: me-west1
+  GCP_REGISTRY: me-west1-docker.pkg.dev
+  IMAGE_REPO: letstok-repository
+  IMAGE_NAME: postiz-app
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: meta
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "tag_latest=true" >> $GITHUB_OUTPUT
+          else
+            echo "tag=sha-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "tag_latest=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build Docker image
+        run: |
+          docker build -f Dockerfile.dev \
+            -t ${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }} .
+          if [ "${{ steps.meta.outputs.tag_latest }}" = "true" ]; then
+            docker tag ${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }} \
+              ${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:latest
+          fi
+
+      - name: Push Docker image
+        if: github.event_name == 'push'
+        run: |
+          docker push ${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+          if [ "${{ steps.meta.outputs.tag_latest }}" = "true" ]; then
+            docker push ${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:latest
+          fi
+
+      - name: Image summary
+        run: |
+          echo "### Image built and pushed" >> $GITHUB_STEP_SUMMARY
+          echo "Image: \`${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}\`" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.meta.outputs.tag_latest }}" = "true" ]; then
+            echo "Also tagged: \`:latest\`" >> $GITHUB_STEP_SUMMARY
+          fi
