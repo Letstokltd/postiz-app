@@ -85,7 +85,7 @@ export async function middleware(request: NextRequest) {
           : findIndex
         ).toUpperCase()}`;
     return NextResponse.redirect(
-      new URL(`/auth${url}${additional}`, nextUrl.href)
+      new URL(`/auth/login${url}${additional}`, nextUrl.href)
     );
   }
 
