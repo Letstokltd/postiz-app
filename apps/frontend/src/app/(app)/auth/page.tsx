@@ -19,10 +19,18 @@ export default async function Auth(params: {searchParams: {provider: string}}) {
   // Firebase SSO: redirect to studio-tools for auth; auto-redirect if already logged in
   if (process.env.FIREBASE_SSO_ENABLED === 'true') {
     const studioUrl = process.env.FIREBASE_SSO_STUDIO_URL || process.env.FIREBASE_AUTH_REDIRECT_URL || 'https://studio-tools.letstok.com';
-    const returnTo = encodeURIComponent(
-      (process.env.FRONTEND_URL || process.env.MAIN_URL || '') + '/auth/firebase-callback'
-    );
-    redirect(`${studioUrl}/sso-redirect?returnTo=${returnTo}`);
+    // Use FIREBASE_AUTH_RETURN_URL (Postiz home base) so callback redirects back to Postiz, not studio-tools
+    const postizBase = (
+      process.env.FIREBASE_AUTH_RETURN_URL ||
+      process.env.FRONTEND_URL ||
+      process.env.MAIN_URL ||
+      ''
+    ).replace(/\/$/, '');
+    if (postizBase && postizBase.startsWith('http')) {
+      const firebaseCallbackUrl = `${postizBase}/auth/firebase-callback`;
+      const returnTo = encodeURIComponent(firebaseCallbackUrl);
+      redirect(`${studioUrl}/sso-redirect?returnTo=${returnTo}`);
+    }
   }
 
   if (process.env.DISABLE_REGISTRATION === 'true') {
