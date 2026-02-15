@@ -49,16 +49,19 @@ export function Register() {
     }
   }, []);
   const load = useCallback(async () => {
-    const { token } = await (
-      await fetch(`/auth/oauth/${provider?.toUpperCase() || 'LOCAL'}/exists`, {
-        method: 'POST',
-        body: JSON.stringify({
-          code,
-        }),
-      })
-    ).json();
-    if (token) {
-      setCode(token);
+    const response = await fetch(`/auth/oauth/${provider?.toUpperCase() || 'LOCAL'}/exists`, {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+      credentials: 'include',
+    });
+    const data = await response.json();
+    if (data.login) {
+      // User exists - cookie already set by backend, redirect to app
+      window.location.href = '/';
+      return;
+    }
+    if (data.token) {
+      setCode(data.token);
       setShow(true);
     }
   }, [provider, code]);
