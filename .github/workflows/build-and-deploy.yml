@@ -3,7 +3,10 @@
 # =============================================================================
 #
 # Required repo secrets: GCP_PROJECT_ID, GCP_SA_KEY
+# For auto-deploy via gitops: PAT (token with push access to v2-gitops repo)
+#
 # Image: me-west1-docker.pkg.dev/letstok-292414/letstok-repository/postiz-app:sha-<SHA>
+# On push to main: builds, pushes, and updates envs/prod/postiz/values.yaml in v2-gitops
 # =============================================================================
 
 name: Build and deploy Postiz to GCP Artifact Registry
@@ -22,6 +25,8 @@ env:
 
 jobs:
   build-and-push:
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -70,8 +75,9 @@ jobs:
           tags: |
             ${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
             ${{ steps.meta.outputs.tag_latest == 'true' && format('{0}/{1}/{2}/{3}:latest', env.GCP_REGISTRY, secrets.GCP_PROJECT_ID, env.IMAGE_REPO, env.IMAGE_NAME) || '' }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Registry cache: same region as image push (me-west1), faster than GHA cache
+          cache-from: type=registry,ref=${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.GCP_REGISTRY }}/${{ secrets.GCP_PROJECT_ID }}/${{ env.IMAGE_REPO }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
           provenance: false
 
       - name: Image summary
@@ -81,3 +87,38 @@ jobs:
           if [ "${{ steps.meta.outputs.tag_latest }}" = "true" ]; then
             echo "Also tagged: \`:latest\`" >> $GITHUB_STEP_SUMMARY
           fi
+
+  deploy:
+    name: Update gitops
+    needs: build-and-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout gitops repo
+        uses: actions/checkout@v4
+        with:
+          repository: Letstokltd/v2-gitops
+          ref: main
+          token: ${{ secrets.PAT }}
+          path: v2-gitops
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Update Postiz image tag
+        run: |
+          cd v2-gitops
+          yq e ".image.tag = \"${{ needs.build-and-push.outputs.tag }}\"" -i envs/prod/postiz/values.yaml
+
+      - name: Push changes
+        run: |
+          cd v2-gitops
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add envs/prod/postiz/values.yaml
+          git diff --staged --quiet || git commit -m "postiz: update image to ${{ needs.build-and-push.outputs.tag }}"
+          git push
