@@ -5,7 +5,7 @@ import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
 import Link from 'next/link';
 import { Button } from '@gitroom/react/form/button';
 import { Input } from '@gitroom/react/form/input';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { classValidatorResolver } from '@hookform/resolvers/class-validator';
 import { LoginUserDto } from '@gitroom/nestjs-libraries/dtos/auth/login.user.dto';
 import { GithubProvider } from '@gitroom/frontend/components/auth/providers/github.provider';
@@ -15,6 +15,8 @@ import { useVariables } from '@gitroom/react/helpers/variable.context';
 import { FarcasterProvider } from '@gitroom/frontend/components/auth/providers/farcaster.provider';
 import WalletProvider from '@gitroom/frontend/components/auth/providers/wallet.provider';
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
+import { useSearchParams } from 'next/navigation';
+import { LoadingComponent } from '@gitroom/frontend/components/layout/loading';
 type Inputs = {
   email: string;
   password: string;
@@ -23,8 +25,12 @@ type Inputs = {
 };
 export function Login() {
   const t = useT();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [notActivated, setNotActivated] = useState(false);
+  const provider = searchParams?.get('provider')?.toUpperCase();
+  const code = searchParams?.get('code') || '';
+  const [oauthProcessing, setOauthProcessing] = useState(!!(provider && code));
   const { isGeneral, neynarClientId, billingEnabled, genericOauth } =
     useVariables();
   const resolver = useMemo(() => {
@@ -38,6 +44,50 @@ export function Login() {
     },
   });
   const fetchData = useFetch();
+
+  const handleOAuthCallback = useCallback(async () => {
+    if (!provider || !code) return;
+    setOauthProcessing(true);
+    try {
+      const response = await fetchData(`/auth/oauth/${provider}/exists`, {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        setOauthProcessing(false);
+        return;
+      }
+      const data = await response.json();
+      if (data.login) {
+        window.location.href = '/';
+        return;
+      }
+      if (data.token) {
+        window.location.href = `/auth?code=${encodeURIComponent(code)}&provider=${provider}`;
+        return;
+      }
+    } catch {
+      setOauthProcessing(false);
+    }
+  }, [provider, code, fetchData]);
+
+  useEffect(() => {
+    if (provider && code) {
+      handleOAuthCallback();
+    }
+  }, [provider, code, handleOAuthCallback]);
+
+  if (oauthProcessing) {
+    return (
+      <div className="flex flex-col items-center gap-4">
+        <LoadingComponent />
+        <p className="text-sm text-gray-400">
+          {t('signing_you_in', 'Signing you in...')}
+        </p>
+      </div>
+    );
+  }
   const onSubmit: SubmitHandler<Inputs> = async (data) => {
     setLoading(true);
     setNotActivated(false);
