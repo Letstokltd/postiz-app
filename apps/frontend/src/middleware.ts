@@ -38,7 +38,9 @@ export async function middleware(request: NextRequest) {
   if (
     nextUrl.pathname.startsWith('/uploads/') ||
     nextUrl.pathname.startsWith('/p/') ||
-    nextUrl.pathname.startsWith('/icons/')
+    nextUrl.pathname.startsWith('/icons/') ||
+    nextUrl.pathname === '/terms-and-condition' ||
+    nextUrl.pathname === '/privacy-terms'
   ) {
     return topResponse;
   }
@@ -84,10 +86,8 @@ export async function middleware(request: NextRequest) {
             : 'github'
           : findIndex
         ).toUpperCase()}`;
-    // OAuth callback with state=login: redirect to /auth (handles both login + register)
-    const targetPath = nextUrl.searchParams.get('state') === 'login' ? '/auth' : '/auth/login';
     return NextResponse.redirect(
-      new URL(`${targetPath}${url}${additional}`, nextUrl.href)
+      new URL(`/auth/login${url}${additional}`, nextUrl.href)
     );
   }
 
