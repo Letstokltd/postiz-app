@@ -113,7 +113,8 @@ jobs:
         run: |
           cd v2-gitops
           TAG="${{ needs.build-and-push.outputs.tag }}"
-          yq e ".image.tag = \"$TAG\"" -i envs/prod/postiz/values.yaml
+          # Both files use postiz-app.image.tag (ArgoCD reads from both via postiz-application valueFiles)
+          yq e ".postiz-app.image.tag = \"$TAG\"" -i envs/prod/postiz/values.yaml
           yq e ".postiz-app.image.tag = \"$TAG\"" -i charts/postiz-wrapper/values.yaml
 
       - name: Push changes
