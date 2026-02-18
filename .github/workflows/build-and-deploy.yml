@@ -6,7 +6,7 @@
 # For auto-deploy via gitops: PAT (token with push access to v2-gitops repo)
 #
 # Image: me-west1-docker.pkg.dev/letstok-292414/letstok-repository/postiz-app:sha-<SHA>
-# On push to main: builds, pushes, and updates envs/prod/postiz/values.yaml in v2-gitops
+# On push to main: builds, pushes, and updates image tag in v2-gitops (both values files)
 # =============================================================================
 
 name: Build and deploy Postiz to GCP Artifact Registry
@@ -112,13 +112,15 @@ jobs:
       - name: Update Postiz image tag
         run: |
           cd v2-gitops
-          yq e ".image.tag = \"${{ needs.build-and-push.outputs.tag }}\"" -i envs/prod/postiz/values.yaml
+          TAG="${{ needs.build-and-push.outputs.tag }}"
+          yq e ".image.tag = \"$TAG\"" -i envs/prod/postiz/values.yaml
+          yq e ".postiz-app.image.tag = \"$TAG\"" -i charts/postiz-wrapper/values.yaml
 
       - name: Push changes
         run: |
           cd v2-gitops
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
-          git add envs/prod/postiz/values.yaml
+          git add envs/prod/postiz/values.yaml charts/postiz-wrapper/values.yaml
           git diff --staged --quiet || git commit -m "postiz: update image to ${{ needs.build-and-push.outputs.tag }}"
           git push
