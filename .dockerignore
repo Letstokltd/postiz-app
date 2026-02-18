@@ -1,25 +1,43 @@
-# We want the docker builds to be clean, and as fast as possible. Don't send
-# any half-built stuff in the build context as a pre-caution (also saves copying
-# 180k files in node_modules that isn't used!).
+# We want the docker builds to be clean, and as fast as possible.
 **/node_modules
-node_modules/*
 node_modules
 docker-data/*
 dist
 .nx
-/apps/frontend/.next
-/apps/backend/dist
-/apps/workers/dist
-/apps/cron/dist
-/apps/commands/dist
+apps/frontend/.next
+apps/backend/dist
+apps/workers/dist
+apps/cron/dist
+apps/commands/dist
 .devcontainer
 **/.git
 **/*.md
 **/LICENSE
+**/README*
 **/npm-debug.log
 **/*.vscode
 .git
-.github
 reports
 .cursor
 *.zip
+*.log
+.DS_Store
+
+# Reduce build context – exclude non-essential files
+Jenkins
+.github
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/__tests__
+**/__mocks__
+.eslintrc*
+.prettierrc
+.prettierignore
+.eslintignore
+jest.config*
+**/tsconfig.tsbuildinfo
+.env
+.env.*
+!.env.example
