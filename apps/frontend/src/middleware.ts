@@ -75,17 +75,21 @@ export async function middleware(request: NextRequest) {
   const org = nextUrl.searchParams.get('org');
   const url = new URL(nextUrl).search;
   if (nextUrl.href.indexOf('/auth') === -1 && !authCookie) {
-    const providers = ['google', 'settings'];
+    // youtube OAuth uses Google, so map it to GOOGLE for auth callback
+    const providers = ['youtube', 'google', 'settings'];
     const findIndex = providers.find((p) => nextUrl.href.indexOf(p) > -1);
+    const providerName =
+      findIndex === 'settings'
+        ? process.env.POSTIZ_GENERIC_OAUTH
+          ? 'generic'
+          : 'github'
+        : findIndex === 'youtube'
+          ? 'google'
+          : findIndex;
     const additional = !findIndex
       ? ''
       : (url.indexOf('?') > -1 ? '&' : '?') +
-        `provider=${(findIndex === 'settings'
-          ? process.env.POSTIZ_GENERIC_OAUTH
-            ? 'generic'
-            : 'github'
-          : findIndex
-        ).toUpperCase()}`;
+        `provider=${providerName.toUpperCase()}`;
     return NextResponse.redirect(
       new URL(`/auth/login${url}${additional}`, nextUrl.href)
     );

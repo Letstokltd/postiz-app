@@ -5,7 +5,7 @@ import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
 import Link from 'next/link';
 import { Button } from '@gitroom/react/form/button';
 import { Input } from '@gitroom/react/form/input';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { classValidatorResolver } from '@hookform/resolvers/class-validator';
 import { LoginUserDto } from '@gitroom/nestjs-libraries/dtos/auth/login.user.dto';
 import { GithubProvider } from '@gitroom/frontend/components/auth/providers/github.provider';
@@ -44,9 +44,12 @@ export function Login() {
     },
   });
   const fetchData = useFetch();
+  const oauthCallbackFiredRef = useRef(false);
 
   const handleOAuthCallback = useCallback(async () => {
     if (!provider || !code) return;
+    if (oauthCallbackFiredRef.current) return; // Prevent double execution (React Strict Mode)
+    oauthCallbackFiredRef.current = true;
     setOauthProcessing(true);
     try {
       const response = await fetchData(`/auth/oauth/${provider}/exists`, {
@@ -56,10 +59,13 @@ export function Login() {
       });
       if (!response.ok) {
         setOauthProcessing(false);
+        const err = await response.json().catch(() => ({}));
+        alert(err?.message || 'Authentication failed. Please try again.');
         return;
       }
       const data = await response.json();
       if (data.login) {
+        // Layout afterRequest will set cookie from auth header and reload
         window.location.href = '/';
         return;
       }
@@ -67,8 +73,11 @@ export function Login() {
         window.location.href = `/auth?code=${encodeURIComponent(code)}&provider=${provider}`;
         return;
       }
-    } catch {
       setOauthProcessing(false);
+      alert('Unexpected response. Please try again.');
+    } catch (e) {
+      setOauthProcessing(false);
+      alert('Authentication failed. Please try again.');
     }
   }, [provider, code, fetchData]);
 

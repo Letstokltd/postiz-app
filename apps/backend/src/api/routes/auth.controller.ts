@@ -292,32 +292,40 @@ export class AuthController {
     @Param('provider') provider: string,
     @Res({ passthrough: false }) response: Response
   ) {
-    const { jwt, token } = await this._authService.checkExists(provider, code);
+    try {
+      const { jwt, token } = await this._authService.checkExists(provider, code);
 
-    if (token) {
-      return response.json({ token });
+      if (token) {
+        return response.json({ token });
+      }
+
+      response.cookie('auth', jwt, {
+        domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
+        ...(!process.env.NOT_SECURED
+          ? {
+              secure: true,
+              httpOnly: true,
+              sameSite: 'none',
+            }
+          : {}),
+        expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
+      });
+
+      if (process.env.NOT_SECURED) {
+        response.header('auth', jwt);
+      }
+
+      response.header('reload', 'true');
+
+      return response.status(200).json({
+        login: true,
+      });
+    } catch (e: any) {
+      const message =
+        e?.message ||
+        (e?.response?.data?.error_description || e?.response?.data?.error) ||
+        'OAuth exchange failed';
+      return response.status(400).json({ message });
     }
-
-    response.cookie('auth', jwt, {
-      domain: getCookieUrlFromDomain(process.env.FRONTEND_URL!),
-      ...(!process.env.NOT_SECURED
-        ? {
-            secure: true,
-            httpOnly: true,
-            sameSite: 'none',
-          }
-        : {}),
-      expires: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
-    });
-
-    if (process.env.NOT_SECURED) {
-      response.header('auth', jwt);
-    }
-
-    response.header('reload', 'true');
-
-    response.status(200).json({
-      login: true,
-    });
   }
 }
