@@ -7,6 +7,8 @@ tmp
 .env
 # dependencies
 node_modules
+.pnpm-store
+node-compile-cache
 
 # IDEs and editors
 /.idea

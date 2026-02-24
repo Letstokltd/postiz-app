@@ -1,8 +1,12 @@
 services:
   postiz:
-    image: ghcr.io/gitroomhq/postiz-app:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: postiz-app:local
     container_name: postiz
     restart: always
+    env_file: .env
     environment:
       # === Required Settings (use 4007 to match official Postiz setup)
       MAIN_URL: 'http://localhost:4007'
@@ -16,12 +20,22 @@ services:
       IS_GENERAL: 'true'
       DISABLE_REGISTRATION: 'false'
       RUN_CRON: 'true'
+      # Required for local HTTP: allows auth cookie + auth header (without secure/sameSite restrictions)
+      NOT_SECURED: 'true'
 
-      # === Storage Settings
-      STORAGE_PROVIDER: 'local'
+      # === Storage Settings (set in .env for gcs)
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+      GCS_BUCKET_NAME: ${GCS_BUCKET_NAME:-}
       UPLOAD_DIRECTORY: '/uploads'
       NEXT_PUBLIC_UPLOAD_DIRECTORY: '/uploads'
       NEXT_PUBLIC_UPLOAD_STATIC_DIRECTORY: '/uploads'
+
+      # === GCS (Google Cloud Storage) - same bucket as studio-tools letstok-media
+      # STORAGE_PROVIDER: 'gcs'
+      # GCS_BUCKET_NAME: 'letstok-media'
+      # GCS_BASE_PATH: 'gallery/postiz'
+      # GCS_CREDENTIALS_JSON: '{"type":"service_account",...}'
+      # Or use FIREBASE_SERVICE_ACCOUNT_JSON for shared Firebase/GCS auth
 
       # === Cloudflare (R2) Settings
       # STORAGE_PROVIDER: 'cloudflare'
@@ -47,8 +61,12 @@ services:
       THREADS_APP_SECRET: ''
       FACEBOOK_APP_ID: ''
       FACEBOOK_APP_SECRET: ''
-      YOUTUBE_CLIENT_ID: ''
-      YOUTUBE_CLIENT_SECRET: ''
+      # Google login + YouTube integration (set in .env for local)
+      YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
+      YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
+      # Must match exactly what you added in Google Console > Credentials > Authorized redirect URIs
+      GOOGLE_OAUTH_REDIRECT_URI: ${GOOGLE_OAUTH_REDIRECT_URI:-http://localhost:4007/integrations/social/youtube}
+      GOOGLE_LOGIN_REDIRECT_URI: ${GOOGLE_LOGIN_REDIRECT_URI:-http://localhost:4007/auth}
       TIKTOK_CLIENT_ID: ''
       TIKTOK_CLIENT_SECRET: ''
       PINTEREST_CLIENT_ID: ''
@@ -110,8 +128,8 @@ services:
       # LINK_DRIP_API_ENDPOINT: "https://api.linkdrip.com/v1/"
       # LINK_DRIP_SHORT_LINK_DOMAIN: "dripl.ink"
 
-    # Wait for Temporal before starting backend (backend blocks on Temporal connection)
-    command: ["sh", "-c", "echo 'Waiting 75s for Temporal to initialize...' && sleep 75 && nginx && pnpm run pm2"]
+    # Wait for Temporal, start backend/frontend, wait for backend (max 5min), then nginx
+    command: ["sh", "-c", "echo 'Waiting for Temporal...' && until node -e \"require('net').createConnection(7233,'temporal').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))\" 2>/dev/null; do sleep 2; done && (test -f /app/.env || node -e \"require('fs').writeFileSync('/app/.env', Object.entries(process.env).filter(([k])=>!/^_|^SHLVL$$|^PWD$$|^OLDPWD$$/.test(k)).map(([k,v])=>k+'='+String(v||'').replace(/\\n/g,'\\\\n')).join('\\n'))\" && echo 'Created .env') && pm2 delete all || true && pnpm run prisma-db-push && pnpm run --parallel pm2 && echo 'Waiting for backend on port 3000 (max 5min)...' && i=0; while [ $$i -lt 150 ]; do node -e \"require('net').createConnection(3000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))\" 2>/dev/null && echo 'Backend ready' && break; i=$$((i+1)); sleep 2; done && [ $$i -ge 150 ] && echo 'Backend wait timeout - nginx starting anyway.'; nginx & pm2 logs"]
     volumes:
       - postiz-config:/config/
       - postiz-uploads:/uploads/

@@ -1,34 +1,75 @@
 # syntax=docker/dockerfile:1
-# BuildKit enables cache mounts for faster pnpm installs
-FROM node:22.20-bookworm-slim
+# Multi-stage build: smaller final image
+# Optimized for layer caching: deps layer cached separately from source
+# ---------------------------------------------------------------------------
+# Stage 1: Build
+# ---------------------------------------------------------------------------
+FROM node:22.20-bookworm-slim AS builder
 ARG NEXT_PUBLIC_VERSION
 ENV NEXT_PUBLIC_VERSION=$NEXT_PUBLIC_VERSION
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     make \
-    python3-pip \
+    python3 \
     bash \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm --no-update-notifier --no-fund --global install pnpm@10.6.1
+
+WORKDIR /app
+
+# Copy only dependency manifests first – this layer caches when lockfile/package.json unchanged
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY apps/frontend/package.json apps/frontend/
+COPY apps/backend/package.json apps/backend/
+COPY apps/orchestrator/package.json apps/orchestrator/
+COPY apps/extension/package.json apps/extension/
+COPY apps/commands/package.json apps/commands/
+COPY apps/sdk/package.json apps/sdk/
+COPY libraries/nestjs-libraries/src/database/prisma libraries/nestjs-libraries/src/database/prisma
+
+# Install dependencies (cached when manifests unchanged)
+RUN pnpm install
+
+# Copy rest of source – only this layer invalidates on code changes
+COPY . .
+
+# Build (cached when source unchanged, reuses deps from previous layer)
+RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm run build
+
+# Remove devDependencies (~2–3GB savings)
+RUN pnpm prune --prod
+
+# Remove apps not used in production (backend, frontend, orchestrator only)
+RUN rm -rf apps/extension apps/commands apps/sdk
+
+# Remove development and CI files
+RUN rm -rf .git .github Jenkins \
+    && rm -rf node_modules/.cache apps/frontend/.next/cache \
+    && find . -type d -name __tests__ -exec rm -rf {} + 2>/dev/null || true \
+    && find . -type d -name __mocks__ -exec rm -rf {} + 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# Stage 2: Runtime (minimal)
+# ---------------------------------------------------------------------------
+FROM node:22.20-bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \
-&& rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 RUN addgroup --system www \
- && adduser --system --ingroup www --home /www --shell /usr/sbin/nologin www \
- && mkdir -p /www \
- && chown -R www:www /www /var/lib/nginx
+    && adduser --system --ingroup www --home /www --shell /usr/sbin/nologin www \
+    && mkdir -p /www \
+    && chown -R www:www /www /var/lib/nginx
 
 RUN npm --no-update-notifier --no-fund --global install pnpm@10.6.1 pm2
 
 WORKDIR /app
 
-COPY . /app
+COPY --from=builder /app .
 COPY var/docker/nginx.conf /etc/nginx/nginx.conf
-
-# Use BuildKit cache mount for pnpm store - speeds up install on cache hits
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
-    pnpm install
-
-# Build runs frontend, backend, orchestrator in parallel (workspace-concurrency=3)
-RUN NODE_OPTIONS="--max-old-space-size=4096" pnpm run build
 
 CMD ["sh", "-c", "nginx && pnpm run pm2"]
