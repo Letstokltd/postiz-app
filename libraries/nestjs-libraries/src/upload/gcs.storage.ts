@@ -10,7 +10,7 @@ import axios from 'axios';
 /**
  * Google Cloud Storage provider for Postiz.
  * Uses the same letstok-media bucket as studio-tools.
- * Uploads go under postiz/ prefix to avoid conflicts.
+ * Uploads go under letstok-social/ prefix to avoid conflicts.
  * Requires GCS_BUCKET_NAME and GCS_CREDENTIALS_JSON (or FIREBASE_SERVICE_ACCOUNT_JSON for shared auth).
  */
 class GcsStorage implements IUploadProvider {
@@ -21,7 +21,7 @@ class GcsStorage implements IUploadProvider {
   constructor(
     bucketName: string,
     credentialsJson: string,
-    private basePath = 'postiz'
+    private basePath = 'letstok-social'
   ) {
     const credentials = JSON.parse(credentialsJson);
     const storage = new Storage({

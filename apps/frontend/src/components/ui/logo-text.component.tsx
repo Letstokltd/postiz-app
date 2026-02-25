@@ -6,7 +6,7 @@ export const LogoTextComponent = () => {
   return (
     <Image
       src="/postiz-text.svg"
-      alt="Postiz"
+      alt="Letstok Social"
       width={180}
       height={56}
       priority

@@ -6,7 +6,7 @@ import { LoadingComponent } from '@gitroom/frontend/components/layout/loading';
 
 /**
  * Firebase SSO callback - receives token from studio-tools redirect,
- * exchanges for Postiz session, then redirects to app.
+ * exchanges for Letstok Social session, then redirects to app.
  */
 export default function FirebaseCallbackPage() {
   const searchParams = useSearchParams();
@@ -31,7 +31,7 @@ export default function FirebaseCallbackPage() {
           const text = await res.text();
           throw new Error(text || 'Firebase SSO failed');
         }
-        // Redirect directly to Postiz dashboard (/launches)
+        // Redirect directly to Letstok Social dashboard (/launches)
         window.location.href = '/launches';
       })
       .catch((e) => {

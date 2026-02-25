@@ -5,8 +5,8 @@ import { LogoTextComponent } from '@gitroom/frontend/components/ui/logo-text.com
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Terms and Conditions - Postiz',
-  description: 'Terms and Conditions for Postiz social media scheduling platform',
+  title: 'Terms and Conditions - Letstok Social',
+  description: 'Terms and Conditions for Letstok Social social media scheduling platform',
 };
 
 export default function TermsAndConditionPage() {

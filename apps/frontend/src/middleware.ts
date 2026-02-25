@@ -80,7 +80,7 @@ export async function middleware(request: NextRequest) {
     const findIndex = providers.find((p) => nextUrl.href.indexOf(p) > -1);
     const providerName =
       findIndex === 'settings'
-        ? process.env.POSTIZ_GENERIC_OAUTH
+        ? process.env.LETSTOK_GENERIC_OAUTH || process.env.POSTIZ_GENERIC_OAUTH
           ? 'generic'
           : 'github'
         : findIndex === 'youtube'

@@ -5,8 +5,8 @@ import { LogoTextComponent } from '@gitroom/frontend/components/ui/logo-text.com
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy - Postiz',
-  description: 'Privacy Policy for Postiz social media scheduling platform',
+  title: 'Privacy Policy - Letstok Social',
+  description: 'Privacy Policy for Letstok Social social media scheduling platform',
 };
 
 export default function PrivacyTermsPage() {
@@ -28,7 +28,7 @@ export default function PrivacyTermsPage() {
         <div className="prose prose-invert max-w-none space-y-6 text-sm">
           <h2 className="text-lg font-semibold mt-8 mb-3">1. Introduction</h2>
           <p>
-            Welcome to Postiz (social.letstok.com). We value your privacy and
+            Welcome to Letstok Social (social.letstok.com). We value your privacy and
             are committed to protecting your personal data. This Privacy Policy
             outlines how we collect, use, and safeguard your information when you
             visit our website and use our social media scheduling services.

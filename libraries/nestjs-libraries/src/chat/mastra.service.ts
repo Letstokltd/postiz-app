@@ -14,7 +14,7 @@ export class MastraService {
       new Mastra({
         storage: pStore,
         agents: {
-          postiz: await this._loadToolsService.agent(),
+          'letstok-social': await this._loadToolsService.agent(),
         },
         logger: new ConsoleLogger({
           level: 'info',

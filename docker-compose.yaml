@@ -1,20 +1,20 @@
 services:
-  postiz:
+  letstok-social:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    image: postiz-app:local
-    container_name: postiz
+    image: letstok-social-app:local
+    container_name: letstok-social
     restart: always
     env_file: .env
     environment:
-      # === Required Settings (use 4007 to match official Postiz setup)
+      # === Required Settings (use 4007 to match official Letstok Social setup)
       MAIN_URL: 'http://localhost:4007'
       FRONTEND_URL: 'http://localhost:4007'
       NEXT_PUBLIC_BACKEND_URL: 'http://localhost:4007/api'
       JWT_SECRET: 'asdasdasdas21312asdasdasd213123sadasdasdas23232'
-      DATABASE_URL: 'postgresql://postiz-user:postiz-password@postiz-postgres:5432/postiz-db-local'
-      REDIS_URL: 'redis://postiz-redis:6379'
+      DATABASE_URL: 'postgresql://letstok-user:letstok-password@letstok-social-postgres:5432/letstok-db-local'
+      REDIS_URL: 'redis://letstok-social-redis:6379'
       BACKEND_INTERNAL_URL: 'http://localhost:3000'
       TEMPORAL_ADDRESS: "temporal:7233"
       IS_GENERAL: 'true'
@@ -33,7 +33,7 @@ services:
       # === GCS (Google Cloud Storage) - same bucket as studio-tools letstok-media
       # STORAGE_PROVIDER: 'gcs'
       # GCS_BUCKET_NAME: 'letstok-media'
-      # GCS_BASE_PATH: 'gallery/postiz'
+      # GCS_BASE_PATH: 'gallery/letstok-social'
       # GCS_CREDENTIALS_JSON: '{"type":"service_account",...}'
       # Or use FIREBASE_SERVICE_ACCOUNT_JSON for shared Firebase/GCS auth
 
@@ -84,15 +84,15 @@ services:
       MASTODON_CLIENT_SECRET: ''
 
       # === OAuth & Authentik Settings
-      # NEXT_PUBLIC_POSTIZ_OAUTH_DISPLAY_NAME: 'Authentik'
-      # NEXT_PUBLIC_POSTIZ_OAUTH_LOGO_URL: 'https://raw.githubusercontent.com/walkxcode/dashboard-icons/master/png/authentik.png'
-      # POSTIZ_GENERIC_OAUTH: 'false'
-      # POSTIZ_OAUTH_URL: 'https://auth.example.com'
-      # POSTIZ_OAUTH_AUTH_URL: 'https://auth.example.com/application/o/authorize'
-      # POSTIZ_OAUTH_TOKEN_URL: 'https://auth.example.com/application/o/token'
-      # POSTIZ_OAUTH_USERINFO_URL: 'https://authentik.example.com/application/o/userinfo'
-      # POSTIZ_OAUTH_CLIENT_ID: ''
-      # POSTIZ_OAUTH_CLIENT_SECRET: ''
+      # NEXT_PUBLIC_LETSTOK_OAUTH_DISPLAY_NAME: 'Authentik'
+      # NEXT_PUBLIC_LETSTOK_OAUTH_LOGO_URL: 'https://raw.githubusercontent.com/walkxcode/dashboard-icons/master/png/authentik.png'
+      # LETSTOK_GENERIC_OAUTH: 'false'
+      # LETSTOK_OAUTH_URL: 'https://auth.example.com'
+      # LETSTOK_OAUTH_AUTH_URL: 'https://auth.example.com/application/o/authorize'
+      # LETSTOK_OAUTH_TOKEN_URL: 'https://auth.example.com/application/o/token'
+      # LETSTOK_OAUTH_USERINFO_URL: 'https://authentik.example.com/application/o/userinfo'
+      # LETSTOK_OAUTH_CLIENT_ID: ''
+      # LETSTOK_OAUTH_CLIENT_SECRET: ''
       # POSTIZ_OAUTH_SCOPE: "openid profile email"  # Optional: uncomment to override default scope
 
       # === Sentry
@@ -131,39 +131,39 @@ services:
     # Wait for Temporal, start backend/frontend, wait for backend (max 5min), then nginx
     command: ["sh", "-c", "echo 'Waiting for Temporal...' && until node -e \"require('net').createConnection(7233,'temporal').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))\" 2>/dev/null; do sleep 2; done && (test -f /app/.env || node -e \"require('fs').writeFileSync('/app/.env', Object.entries(process.env).filter(([k])=>!/^_|^SHLVL$$|^PWD$$|^OLDPWD$$/.test(k)).map(([k,v])=>k+'='+String(v||'').replace(/\\n/g,'\\\\n')).join('\\n'))\" && echo 'Created .env') && pm2 delete all || true && pnpm run prisma-db-push && pnpm run --parallel pm2 && echo 'Waiting for backend on port 3000 (max 5min)...' && i=0; while [ $$i -lt 150 ]; do node -e \"require('net').createConnection(3000,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))\" 2>/dev/null && echo 'Backend ready' && break; i=$$((i+1)); sleep 2; done && [ $$i -ge 150 ] && echo 'Backend wait timeout - nginx starting anyway.'; nginx & pm2 logs"]
     volumes:
-      - postiz-config:/config/
-      - postiz-uploads:/uploads/
+      - letstok-social-config:/config/
+      - letstok-social-uploads:/uploads/
     ports:
       - "4007:5000"
     networks:
-      - postiz-network
+      - letstok-social-network
       - temporal-network
     depends_on:
-      postiz-postgres:
+      letstok-social-postgres:
         condition: service_healthy
-      postiz-redis:
+      letstok-social-redis:
         condition: service_healthy
 
-  postiz-postgres:
+  letstok-social-postgres:
     image: postgres:17-alpine
-    container_name: postiz-postgres
+    container_name: letstok-social-postgres
     restart: always
     environment:
-      POSTGRES_PASSWORD: postiz-password
-      POSTGRES_USER: postiz-user
-      POSTGRES_DB: postiz-db-local
+      POSTGRES_PASSWORD: letstok-password
+      POSTGRES_USER: letstok-user
+      POSTGRES_DB: letstok-db-local
     volumes:
       - postgres-volume:/var/lib/postgresql/data
     networks:
-      - postiz-network
+      - letstok-social-network
     healthcheck:
-      test: pg_isready -U postiz-user -d postiz-db-local
+      test: pg_isready -U letstok-user -d letstok-db-local
       interval: 10s
       timeout: 3s
       retries: 3
-  postiz-redis:
+  letstok-social-redis:
     image: redis:7.2
-    container_name: postiz-redis
+    container_name: letstok-social-redis
     restart: always
     healthcheck:
       test: redis-cli ping
@@ -171,9 +171,9 @@ services:
       timeout: 3s
       retries: 3
     volumes:
-      - postiz-redis-data:/data
+      - letstok-social-redis-data:/data
     networks:
-      - postiz-network
+      - letstok-social-network
 
   # For Application Monitoring / Debugging
   spotlight:
@@ -183,7 +183,7 @@ services:
       - 8969:8969/tcp
     image: ghcr.io/getsentry/spotlight:latest
     networks:
-      - postiz-network
+      - letstok-social-network
 
   # -----------------------
   # Temporal Stack
@@ -273,17 +273,17 @@ volumes:
   postgres-volume:
     external: false
 
-  postiz-redis-data:
+  letstok-social-redis-data:
     external: false
 
-  postiz-config:
+  letstok-social-config:
     external: false
 
-  postiz-uploads:
+  letstok-social-uploads:
     external: false
 
 networks:
-  postiz-network:
+  letstok-social-network:
     external: false
   temporal-network:
     driver: bridge
