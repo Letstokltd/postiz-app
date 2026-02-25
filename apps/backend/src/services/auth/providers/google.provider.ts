@@ -3,11 +3,20 @@ import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library/build/src/auth/oauth2client';
 import { ProvidersInterface } from '@gitroom/backend/services/auth/providers.interface';
 
-const clientAndYoutube = () => {
+const getGoogleRedirectUri = () =>
+  process.env.GOOGLE_OAUTH_REDIRECT_URI ||
+  `${process.env.FRONTEND_URL}/integrations/social/youtube`;
+
+/** Login: use GOOGLE_LOGIN_REDIRECT_URI for local (e.g. http://localhost:4007/auth); otherwise matches production (integrations/social/youtube) */
+const getGoogleLoginRedirectUri = () =>
+  process.env.GOOGLE_LOGIN_REDIRECT_URI ||
+  getGoogleRedirectUri();
+
+const clientWithRedirect = (redirectUri: string) => {
   const client = new google.auth.OAuth2({
     clientId: process.env.YOUTUBE_CLIENT_ID,
     clientSecret: process.env.YOUTUBE_CLIENT_SECRET,
-    redirectUri: `${process.env.FRONTEND_URL}/integrations/social/youtube`,
+    redirectUri,
   });
 
   const youtube = (newClient: OAuth2Client) =>
@@ -31,15 +40,19 @@ const clientAndYoutube = () => {
   return { client, youtube, oauth2, youtubeAnalytics };
 };
 
+const clientAndYoutube = () =>
+  clientWithRedirect(getGoogleRedirectUri());
+
 export class GoogleProvider implements ProvidersInterface {
   generateLink() {
     const state = 'login';
-    const { client } = clientAndYoutube();
+    const redirectUri = getGoogleLoginRedirectUri();
+    const { client } = clientWithRedirect(redirectUri);
     return client.generateAuthUrl({
-      access_type: 'online',
+      access_type: 'offline',
       prompt: 'consent',
       state,
-      redirect_uri: `${process.env.FRONTEND_URL}/integrations/social/youtube`,
+      redirect_uri: redirectUri,
       scope: [
         'https://www.googleapis.com/auth/userinfo.profile',
         'https://www.googleapis.com/auth/userinfo.email',
@@ -48,8 +61,12 @@ export class GoogleProvider implements ProvidersInterface {
   }
 
   async getToken(code: string) {
-    const { client, oauth2 } = clientAndYoutube();
-    const { tokens } = await client.getToken(code);
+    const redirectUri = getGoogleLoginRedirectUri();
+    const { client } = clientWithRedirect(redirectUri);
+    const { tokens } = await client.getToken({
+      code,
+      redirect_uri: redirectUri,
+    });
     return tokens.access_token;
   }
 
