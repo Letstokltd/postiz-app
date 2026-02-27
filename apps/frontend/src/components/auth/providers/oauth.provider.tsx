@@ -18,6 +18,9 @@ export const OauthProvider = () => {
         );
       }
       const link = await response.text();
+      if (!link.startsWith('http')) {
+        throw new Error('Invalid login redirect URL');
+      }
       window.location.href = link;
     } catch (error) {
       console.error('Failed to get generic oauth login link:', error);

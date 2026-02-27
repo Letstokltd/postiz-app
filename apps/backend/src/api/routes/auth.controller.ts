@@ -321,10 +321,10 @@ export class AuthController {
         login: true,
       });
     } catch (e: any) {
+      const googleError =
+        e?.response?.data?.error_description || e?.response?.data?.error;
       const message =
-        e?.message ||
-        (e?.response?.data?.error_description || e?.response?.data?.error) ||
-        'OAuth exchange failed';
+        googleError || e?.message || 'OAuth exchange failed';
       return response.status(400).json({ message });
     }
   }

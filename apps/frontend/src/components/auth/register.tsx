@@ -37,36 +37,67 @@ type Inputs = {
   providerToken: string;
   provider: string;
 };
+function inferProviderFromSearchParams(searchParams: ReturnType<typeof useSearchParams> | null): string | null {
+  const provider = searchParams?.get('provider')?.toUpperCase();
+  if (provider) return provider;
+  const iss = searchParams?.get('iss') || '';
+  const code = searchParams?.get('code');
+  if (code && iss.includes('accounts.google.com')) return 'GOOGLE';
+  return null;
+}
+
 export function Register() {
   const getQuery = useSearchParams();
   const fetch = useFetch();
-  const [provider] = useState(getQuery?.get('provider')?.toUpperCase());
+  const [provider] = useState(() => inferProviderFromSearchParams(getQuery));
   const [code, setCode] = useState(getQuery?.get('code') || '');
   const [show, setShow] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   useEffect(() => {
     if (provider && code) {
       load();
     }
   }, []);
   const load = useCallback(async () => {
-    const response = await fetch(`/auth/oauth/${provider?.toUpperCase() || 'LOCAL'}/exists`, {
-      method: 'POST',
-      body: JSON.stringify({ code }),
-      credentials: 'include',
-    });
-    const data = await response.json();
-    if (data.login) {
-      // User exists - cookie already set by backend, redirect to app
-      window.location.href = '/';
-      return;
-    }
-    if (data.token) {
-      setCode(data.token);
-      setShow(true);
+    try {
+      const response = await fetch(`/auth/oauth/${provider?.toUpperCase() || 'LOCAL'}/exists`, {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        setLoadError(err?.message || 'Authentication failed. Please try again.');
+        return;
+      }
+      const data = await response.json();
+      if (data.login) {
+        // User exists - cookie already set by backend, redirect to app
+        window.location.href = '/';
+        return;
+      }
+      if (data.token) {
+        setCode(data.token);
+        setShow(true);
+      } else {
+        setLoadError('Unexpected response. Please try again.');
+      }
+    } catch {
+      setLoadError('Authentication failed. Please try again.');
     }
   }, [provider, code]);
   if (!code && !provider) {
     return <RegisterAfter token="" provider="LOCAL" />;
+  }
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center gap-4">
+        <p className="text-red-500">{loadError}</p>
+        <Link href="/auth" className="underline text-primary">
+          Try again
+        </Link>
+      </div>
+    );
   }
   if (!show) {
     return <LoadingComponent />;

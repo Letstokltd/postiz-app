@@ -7,9 +7,18 @@ export const GoogleProvider = () => {
   const fetch = useFetch();
   const t = useT();
   const gotoLogin = useCallback(async () => {
-    const link = await (await fetch('/auth/oauth/GOOGLE')).text();
+    const response = await fetch('/auth/oauth/GOOGLE');
+    if (!response.ok) {
+      alert(t('authentication_failed', 'Authentication failed. Please try again.'));
+      return;
+    }
+    const link = await response.text();
+    if (!link.startsWith('http')) {
+      alert(t('authentication_failed', 'Authentication failed. Please try again.'));
+      return;
+    }
     window.location.href = link;
-  }, []);
+  }, [fetch, t]);
   return (
     <div
       onClick={gotoLogin}
