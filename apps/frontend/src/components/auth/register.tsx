@@ -60,9 +60,15 @@ export function Register() {
   }, []);
   const load = useCallback(async () => {
     try {
+      const redirectUri =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}${window.location.pathname}${
+              provider ? `?provider=${encodeURIComponent(provider.toUpperCase())}` : ''
+            }`
+          : undefined;
       const response = await fetch(`/auth/oauth/${provider?.toUpperCase() || 'LOCAL'}/exists`, {
         method: 'POST',
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, redirectUri }),
         credentials: 'include',
       });
       if (!response.ok) {

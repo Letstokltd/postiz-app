@@ -60,13 +60,19 @@ export class GoogleProvider implements ProvidersInterface {
     });
   }
 
-  async getToken(code: string) {
+  async getToken(code: string, redirectUri?: string) {
+    const clientRedirectUri = redirectUri?.trim();
+    const clientBaseUri =
+      clientRedirectUri?.includes('?') ? clientRedirectUri.split('?')[0] : undefined;
     const configuredRedirectUri = getGoogleLoginRedirectUri();
     const fallbackRedirectUris = [
+      clientBaseUri ?? clientRedirectUri,
+      clientRedirectUri,
       configuredRedirectUri,
+      `${process.env.FRONTEND_URL}/auth/login`,
       `${process.env.FRONTEND_URL}/auth?provider=GOOGLE`,
       `${process.env.FRONTEND_URL}/auth`,
-    ].filter(Boolean) as string[];
+    ].filter((uri): uri is string => !!uri && /^https?:\/\//.test(uri));
     const redirectUris = Array.from(new Set(fallbackRedirectUris));
 
     if (!redirectUris.length) {
@@ -76,12 +82,12 @@ export class GoogleProvider implements ProvidersInterface {
     }
 
     let lastError: unknown;
-    for (const redirectUri of redirectUris) {
+    for (const uri of redirectUris) {
       try {
-        const { client } = clientWithRedirect(redirectUri);
+        const { client } = clientWithRedirect(uri);
         const { tokens } = await client.getToken({
           code,
-          redirect_uri: redirectUri,
+          redirect_uri: uri,
         });
         return tokens.access_token;
       } catch (error) {

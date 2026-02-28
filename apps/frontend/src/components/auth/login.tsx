@@ -52,9 +52,15 @@ export function Login() {
     oauthCallbackFiredRef.current = true;
     setOauthProcessing(true);
     try {
+      const redirectUri =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}${window.location.pathname}${
+              provider ? `?provider=${encodeURIComponent(provider)}` : ''
+            }`
+          : undefined;
       const response = await fetchData(`/auth/oauth/${provider}/exists`, {
         method: 'POST',
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code, redirectUri }),
         credentials: 'include',
       });
       if (!response.ok) {

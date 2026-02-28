@@ -289,11 +289,16 @@ export class AuthController {
   @Post('/oauth/:provider/exists')
   async oauthExists(
     @Body('code') code: string,
+    @Body('redirectUri') redirectUri: string | undefined,
     @Param('provider') provider: string,
     @Res({ passthrough: false }) response: Response
   ) {
     try {
-      const { jwt, token } = await this._authService.checkExists(provider, code);
+      const { jwt, token } = await this._authService.checkExists(
+        provider,
+        code,
+        redirectUri
+      );
 
       if (token) {
         return response.json({ token });

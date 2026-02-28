@@ -59,7 +59,7 @@ export class OauthProvider implements ProvidersInterface {
     return `${this.authUrl}?${params.toString()}`;
   }
 
-  async getToken(code: string): Promise<string> {
+  async getToken(code: string, _redirectUri?: string): Promise<string> {
     const response = await fetch(`${this.tokenUrl}`, {
       method: 'POST',
       headers: {
