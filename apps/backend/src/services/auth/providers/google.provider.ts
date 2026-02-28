@@ -61,13 +61,39 @@ export class GoogleProvider implements ProvidersInterface {
   }
 
   async getToken(code: string) {
-    const redirectUri = getGoogleLoginRedirectUri();
-    const { client } = clientWithRedirect(redirectUri);
-    const { tokens } = await client.getToken({
-      code,
-      redirect_uri: redirectUri,
-    });
-    return tokens.access_token;
+    const configuredRedirectUri = getGoogleLoginRedirectUri();
+    const fallbackRedirectUris = [
+      configuredRedirectUri,
+      `${process.env.FRONTEND_URL}/auth?provider=GOOGLE`,
+      `${process.env.FRONTEND_URL}/auth`,
+    ].filter(Boolean) as string[];
+    const redirectUris = Array.from(new Set(fallbackRedirectUris));
+
+    if (!redirectUris.length) {
+      throw new Error(
+        'Google OAuth redirect URI is not configured. Set GOOGLE_LOGIN_REDIRECT_URI, GOOGLE_OAUTH_REDIRECT_URI, or FRONTEND_URL.'
+      );
+    }
+
+    let lastError: unknown;
+    for (const redirectUri of redirectUris) {
+      try {
+        const { client } = clientWithRedirect(redirectUri);
+        const { tokens } = await client.getToken({
+          code,
+          redirect_uri: redirectUri,
+        });
+        return tokens.access_token;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    if (lastError instanceof Error) {
+      throw lastError;
+    }
+
+    throw new Error('Google OAuth token exchange failed');
   }
 
   async getUser(providerToken: string) {
