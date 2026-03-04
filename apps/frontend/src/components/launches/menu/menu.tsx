@@ -199,7 +199,7 @@ export const Menu: FC<{
       return;
     }
     if (!res.ok) {
-      toast.show(t('channel_enabled_error', 'Could not enable channel'), 'error');
+      toast.show(t('channel_enabled_error', 'Could not enable channel'), 'warning');
       return;
     }
     toast.show(t('channel_enabled', 'Channel Enabled'), 'success');
