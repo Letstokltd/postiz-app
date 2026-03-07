@@ -3,7 +3,6 @@ import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
 import { Provider } from '@prisma/client';
 import { PrismaService } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
 
-const CACHE_TTL_SECONDS = 300; // 5 minutes
 const CACHE_KEY_PREFIX = 'studio-tools-plan:';
 
 export interface PlanDetails {
@@ -60,19 +59,9 @@ export class PlanSyncService {
   }
 
   /**
-   * Get plan details from Studio Tools API, with Redis caching.
+   * Get plan details from Studio Tools API (always fetches fresh).
    */
   async getPlanDetails(firebaseUid: string): Promise<PlanDetails | null> {
-    const cacheKey = `${CACHE_KEY_PREFIX}${firebaseUid}`;
-    const cached = await ioRedis.get(cacheKey);
-    if (cached) {
-      try {
-        return JSON.parse(cached) as PlanDetails;
-      } catch {
-        // Invalid cache, fetch fresh
-      }
-    }
-
     const apiUrl = process.env.STUDIO_TOOLS_API_URL;
     const apiKey = process.env.INTERNAL_API_KEY;
     if (!apiUrl || !apiKey) {
@@ -94,20 +83,18 @@ export class PlanSyncService {
         postizTier?: string;
         planName?: string;
       };
-      const planDetails: PlanDetails = {
+      return {
         socialChannels: data.socialChannels ?? 0,
         postizTier: data.postizTier ?? 'FREE',
         planName: data.planName ?? 'Free',
       };
-      await ioRedis.set(
-        cacheKey,
-        JSON.stringify(planDetails),
-        'EX',
-        CACHE_TTL_SECONDS
-      );
-      return planDetails;
     } catch {
       return null;
     }
+  }
+
+  async invalidateCache(firebaseUid: string): Promise<void> {
+    const cacheKey = `${CACHE_KEY_PREFIX}${firebaseUid}`;
+    await ioRedis.del(cacheKey);
   }
 }

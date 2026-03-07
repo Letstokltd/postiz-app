@@ -18,8 +18,8 @@ export const usePlan = () => {
   }, []);
 
   return useSWR<PlanInfo>('/user/plan', load, {
-    revalidateOnFocus: false,
-    revalidateOnReconnect: false,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
     revalidateIfStale: false,
     refreshWhenOffline: false,
     refreshWhenHidden: false,

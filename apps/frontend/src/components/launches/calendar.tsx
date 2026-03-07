@@ -218,82 +218,48 @@ const usePostActions = (onMutate?: () => void) => {
 };
 
 export const DayView = () => {
-  const calendar = useCalendar();
-  const { integrations, posts, startDate } = calendar;
+  const { startDate } = useCalendar();
 
-  // Set dayjs locale based on current language
   const currentLanguage = i18next.resolvedLanguage || 'en';
   dayjs.locale(currentLanguage);
 
-  const currentDay = dayjs.utc(startDate);
-
-  const options = useMemo(() => {
-    const createdPosts = posts.map((post) => ({
-      integration: [integrations.find((i) => i.id === post.integration.id)!],
-      image: post?.integration?.picture || '',
-      identifier: post?.integration?.providerIdentifier || '',
-      id: post?.integration?.id || '',
-      name: post?.integration?.name || '',
-      time: dayjs
-        .utc(post.publishDate)
-        .diff(dayjs.utc(post.publishDate).startOf('day'), 'minute'),
-    }));
-    return sortBy(
-      Object.values(
-        groupBy(
-          [
-            ...createdPosts,
-            ...integrations.flatMap((p) =>
-              p.time.flatMap((t) => ({
-                integration: p,
-                identifier: p?.identifier,
-                name: p?.name,
-                id: p?.id,
-                image: p?.picture,
-                time: t?.time,
-              }))
-            ),
-          ],
-          (p: any) => p.time
-        )
-      ),
-      (p) => p[0].time
-    );
-  }, [integrations, posts]);
+  const currentDay = useMemo(() => newDayjs(startDate), [startDate]);
 
   return (
-    <div className="flex flex-col gap-[10px] flex-1 relative">
-      <div className="absolute start-0 top-0 w-full h-full flex flex-col overflow-auto scrollbar scrollbar-thumb-fifth scrollbar-track-newBgColor">
-        {options.map((option) => (
-          <Fragment key={option[0].time}>
-            <div className="text-center text-[14px] min-h-[21px]">
-              {newDayjs()
-                .utc()
-                .startOf('day')
-                .add(option[0].time, 'minute')
-                .local()
-                .format(isUSCitizen() ? 'hh:mm A' : 'LT')}
+    <div className="flex flex-col text-textColor flex-1">
+      <div className="flex-1 relative">
+        <div className="grid [grid-template-columns:136px_minmax(0,_1fr)] gap-[4px] rounded-[10px] absolute h-full start-0 top-0 w-full overflow-auto scrollbar scrollbar-thumb-fifth scrollbar-track-newBgColor">
+          <div className="z-10 bg-newTableHeader flex justify-center items-center flex-col h-[62px] rounded-[8px] sticky top-0" />
+          <div className="p-2 text-center bg-newTableHeader flex justify-center items-center flex-col h-[62px] rounded-[8px] sticky top-0 z-[20]">
+            <div className="text-[14px] font-[500] text-newTableText">
+              {currentDay.format('dddd')}
             </div>
             <div
-              key={option[0].time}
-              className="min-h-[60px] rounded-[10px] flex justify-center items-center gap-[10px] mb-[20px]"
+              className={clsx(
+                'text-[14px] font-[600] flex items-center justify-center gap-[6px]',
+                currentDay.format('L') === newDayjs().format('L') &&
+                  'text-newTableTextFocused'
+              )}
             >
-              <CalendarContext.Provider
-                value={{
-                  ...calendar,
-                  integrations: option.flatMap((p) => p.integration),
-                }}
-              >
-                <CalendarColumn
-                  getDate={currentDay
-                    .startOf('day')
-                    .add(option[0].time, 'minute')
-                    .local()}
-                />
-              </CalendarContext.Provider>
+              {currentDay.format('L') === newDayjs().format('L') && (
+                <div className="w-[6px] h-[6px] bg-newTableTextFocused rounded-full" />
+              )}
+              {currentDay.format('L')}
             </div>
-          </Fragment>
-        ))}
+          </div>
+          {hours.map((hour) => (
+            <Fragment key={hour}>
+              <div className="p-2 pe-4 text-center items-center justify-center flex text-[14px] text-newTableText">
+                {convertTimeFormatBasedOnLocality(hour)}
+              </div>
+              <div className="relative">
+                <CalendarColumn
+                  getDate={currentDay.hour(hour).startOf('hour')}
+                />
+              </div>
+            </Fragment>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -562,10 +528,7 @@ export const CalendarColumn: FC<{
     return posts.filter((post) => {
       const pList = dayjs.utc(post.publishDate).local();
       const check =
-        display === 'day'
-          ? pList.format('YYYY-MM-DD HH:mm') ===
-            getDate.format('YYYY-MM-DD HH:mm')
-          : display === 'week'
+        display === 'day' || display === 'week'
           ? pList.isSameOrAfter(getDate.startOf('hour')) &&
             pList.isBefore(getDate.endOf('hour'))
           : pList.format('DD/MM/YYYY') === getDate.format('DD/MM/YYYY');
@@ -861,60 +824,15 @@ export const CalendarColumn: FC<{
                 'flex items-center justify-center cursor-pointer pb-[2.5px]'
               )}
             >
-              {display !== 'day' && (
+              <div
+                className={clsx(
+                  'group hover:before:h-[30px] w-full h-full rounded-[10px] flex justify-center items-center text-white'
+                )}
+              >
                 <div
-                  className={clsx(
-                    'group hover:before:h-[30px] w-full h-full rounded-[10px] flex justify-center items-center text-white'
-                  )}
-                >
-                  <div
-                    className={`group-hover:before:content-["+"] pb-[5px] flex justify-center items-center rounded-[8px] transition-all group-hover:bg-btnPrimary w-full h-full max-w-[40px] max-h-[40px]`}
-                  />
-                </div>
-              )}
-              {display === 'day' && (
-                <div
-                  className={`w-full h-full rounded-[10px] py-[10px] flex-wrap hover:border hover:border-seventh flex justify-center items-center gap-[20px] opacity-30 grayscale hover:grayscale-0 hover:opacity-100`}
-                >
-                  {integrations.map((selectedIntegrations) => (
-                    <div
-                      className="relative"
-                      key={selectedIntegrations.identifier}
-                    >
-                      <div
-                        className={clsx(
-                          'relative w-[34px] h-[34px] rounded-[8px] flex justify-center items-center filter transition-all duration-500'
-                        )}
-                      >
-                        <Image
-                          src={
-                            selectedIntegrations.picture || '/no-picture.jpg'
-                          }
-                          className="rounded-[8px]"
-                          alt={selectedIntegrations.identifier}
-                          width={32}
-                          height={32}
-                        />
-                        {selectedIntegrations.identifier === 'youtube' ? (
-                          <img
-                            src="/icons/platforms/youtube.svg"
-                            className="absolute z-10 -bottom-[5px] -end-[5px]"
-                            width={20}
-                          />
-                        ) : (
-                          <Image
-                            src={`/icons/platforms/${selectedIntegrations.identifier}.png`}
-                            className="rounded-[8px] absolute z-10 -bottom-[5px] -end-[5px] border border-fifth"
-                            alt={selectedIntegrations.identifier}
-                            width={20}
-                            height={20}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                  className={`group-hover:before:content-["+"] pb-[5px] flex justify-center items-center rounded-[8px] transition-all group-hover:bg-btnPrimary w-full h-full max-w-[40px] max-h-[40px]`}
+                />
+              </div>
             </div>
           </div>
         )}
