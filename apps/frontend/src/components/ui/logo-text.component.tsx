@@ -5,12 +5,12 @@ import Image from 'next/image';
 export const LogoTextComponent = () => {
   return (
     <Image
-      src="/postiz-text.svg"
-      alt="Letstok Social"
-      width={180}
-      height={56}
+      src="/logo-text.svg"
+      alt="LetsPost"
+      width={400}
+      height={120}
       priority
-      className="h-8 w-auto object-contain dark:invert"
+      className="w-[200px] h-auto object-contain"
     />
   );
 };

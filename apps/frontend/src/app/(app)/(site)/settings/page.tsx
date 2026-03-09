@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { Metadata } from 'next';
 import { isGeneralServerSide } from '@gitroom/helpers/utils/is.general.server.side';
 export const metadata: Metadata = {
-  title: `${isGeneralServerSide() ? 'Letstok Social' : 'Gitroom'} Settings`,
+  title: `${isGeneralServerSide() ? 'LetsPost' : 'Gitroom'} Settings`,
   description: '',
 };
 export default async function Index({

@@ -34,7 +34,7 @@ export const LogoutComponent = () => {
   return (
     <div className="text-red-400 cursor-pointer" onClick={logout}>
       {t('logout_from', 'Logout from')}
-      {isGeneral ? ' Letstok Social' : ' Gitroom'}
+      {isGeneral ? ' LetsPost' : ' Gitroom'}
     </div>
   );
 };

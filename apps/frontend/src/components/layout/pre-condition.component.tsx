@@ -5,15 +5,12 @@ import { useModals } from '@gitroom/frontend/components/layout/new-modal';
 import { Button } from '@gitroom/react/form/button';
 import { useVariables } from '@gitroom/react/helpers/variable.context';
 
-const getLetstokPricingUrl = () =>
-  process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL
-    ? `${process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL}/pricing`
-    : null;
-
 export const PreConditionComponentModal: FC = () => {
   const modal = useModals();
-  const { isGeneral } = useVariables();
-  const letstokPricingUrl = getLetstokPricingUrl();
+  const { isGeneral, studioToolsUrl } = useVariables();
+  const letstokPricingUrl = studioToolsUrl
+    ? `${studioToolsUrl}/pricing`
+    : null;
   const billingUrl =
     isGeneral && letstokPricingUrl
       ? `${letstokPricingUrl}?finishTrial=true`
@@ -21,7 +18,7 @@ export const PreConditionComponentModal: FC = () => {
   return (
     <div className="flex flex-col gap-[16px]">
       <div className="whitespace-pre-line">
-        This social channel was connected previously to another Letstok Social account.
+        This social channel was connected previously to another LetsPost account.
         {'\n'}
         To continue, please fast-track your trial for an immediate charge.{'\n'}
         {'\n'}

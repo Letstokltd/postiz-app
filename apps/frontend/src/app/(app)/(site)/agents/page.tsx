@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 export const metadata: Metadata = {
-  title: 'Letstok Social - Agent',
+  title: 'LetsPost - Agent',
   description: '',
 };
 

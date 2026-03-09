@@ -22,7 +22,7 @@ const RenderPreviewDate = dynamicLoad(
 
 dayjs.extend(utc);
 export const metadata: Metadata = {
-  title: `${isGeneralServerSide() ? 'Letstok Social' : 'Gitroom'} Preview`,
+  title: `${isGeneralServerSide() ? 'LetsPost' : 'Gitroom'} Preview`,
   description: '',
 };
 export default async function Auth({
@@ -60,7 +60,7 @@ export default async function Auth({
                     src="/postiz-text.svg"
                     width={135}
                     height={40}
-                    alt="Letstok Social"
+                    alt="LetsPost"
                     className="h-8 w-auto object-contain dark:invert"
                   />
                 </Link>
