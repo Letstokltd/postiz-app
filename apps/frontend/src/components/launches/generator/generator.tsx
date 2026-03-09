@@ -294,10 +294,10 @@ export const GeneratorComponent = () => {
   const router = useRouter();
   const modal = useModals();
   const all = useCalendar();
-  const { isGeneral } = useVariables();
+  const { isGeneral, studioToolsUrl } = useVariables();
   const upgradeUrl =
-    isGeneral && process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL
-      ? `${process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL}/pricing`
+    isGeneral && studioToolsUrl
+      ? `${studioToolsUrl}/pricing`
       : '/billing';
   const generate = useCallback(async () => {
     if (!user?.tier?.ai) {

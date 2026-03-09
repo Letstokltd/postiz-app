@@ -21,15 +21,12 @@ export function setCookie(cname: string, cvalue: string, exdays: number) {
   const expires = 'expires=' + d.toUTCString();
   document.cookie = cname + '=' + cvalue + ';' + expires + ';path=/';
 }
-const getLetstokPricingUrl = () =>
-  process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL
-    ? `${process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL}/pricing`
-    : null;
-
 function LayoutContextInner(params: { children: ReactNode }) {
   const returnUrl = useReturnUrl();
-  const { backendUrl, isGeneral, isSecured } = useVariables();
-  const letstokPricingUrl = getLetstokPricingUrl();
+  const { backendUrl, isGeneral, isSecured, studioToolsUrl } = useVariables();
+  const letstokPricingUrl = studioToolsUrl
+    ? `${studioToolsUrl}/pricing`
+    : null;
   const billingRedirectUrl =
     isGeneral && letstokPricingUrl ? letstokPricingUrl : '/billing';
   const afterRequest = useCallback(

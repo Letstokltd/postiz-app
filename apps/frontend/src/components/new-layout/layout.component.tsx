@@ -55,14 +55,20 @@ const planColorByName: Record<string, string> = {
 
 const PlanBadge = () => {
   const { data: plan } = usePlan();
+  const { studioToolsUrl, isGeneral } = useVariables();
   const planName = plan?.planName || 'Free';
   const color = planColorByName[planName] || '#6b7280';
+  const pricingUrl = studioToolsUrl
+    ? `${studioToolsUrl}/pricing`
+    : isGeneral
+      ? 'https://studio-tools.letstok.com/pricing'
+      : '/billing';
 
   return (
     <a
-      href={`${process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL || ''}/pricing`}
-      target="_blank"
-      rel="noopener noreferrer"
+      href={pricingUrl}
+      target={studioToolsUrl || isGeneral ? '_blank' : undefined}
+      rel={studioToolsUrl || isGeneral ? 'noopener noreferrer' : undefined}
       className="inline-flex items-center gap-[5px] rounded-md px-[8px] py-[3px] text-[12px] font-medium text-white transition-opacity hover:opacity-80"
       style={{ backgroundColor: color }}
     >
@@ -89,7 +95,7 @@ const jakartaSans = Plus_Jakarta_Sans({
 export const LayoutComponent = ({ children }: { children: ReactNode }) => {
   const fetch = useFetch();
 
-  const { backendUrl, billingEnabled, isGeneral } = useVariables();
+  const { backendUrl, billingEnabled, isGeneral, studioToolsUrl } = useVariables();
 
   // Feedback icon component attaches Sentry feedback to a top-bar icon when DSN is present
   const searchParams = useSearchParams();
@@ -155,10 +161,10 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                         <Title />
                       </div>
                       <div className="flex gap-[20px] text-textItemBlur">
-                        {process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL && isGeneral && (
+                        {studioToolsUrl && isGeneral && (
                           <>
                             <a
-                              href={process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL}
+                              href={studioToolsUrl}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-1.5 hover:text-newTextColor transition-colors"
@@ -173,7 +179,7 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                               <span className="text-sm font-medium">Letstok AI</span>
                             </a>
                             <a
-                              href={`${process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL}/pricing`}
+                              href={`${studioToolsUrl}/pricing`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-1.5 hover:text-newTextColor transition-colors"

@@ -16,15 +16,12 @@ interface MenuItemInterface {
   external?: boolean;
 }
 
-const getLetstokPricingUrl = () =>
-  process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL
-    ? `${process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL}/pricing`
-    : null;
-
 export const useMenuItem = () => {
-  const { isGeneral } = useVariables();
+  const { isGeneral, studioToolsUrl } = useVariables();
   const t = useT();
-  const letstokPricingUrl = getLetstokPricingUrl();
+  const letstokPricingUrl = studioToolsUrl
+    ? `${studioToolsUrl}/pricing`
+    : null;
   const useLetstokPricing = isGeneral && !!letstokPricingUrl;
 
   const firstMenu = [

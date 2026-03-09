@@ -82,12 +82,12 @@ export const FirstBillingComponent = () => {
 
   const showYouTube = () => {
     modals.openModal({
-      title: 'Grow Fast With Letstok Social (Play the video)',
+      title: 'Grow Fast With LetsPost (Play the video)',
       children: (
         <iframe
           className="h-full aspect-video min-w-[800px]"
           src="https://www.youtube.com/embed/BdsCVvEYgHU?si=vvhaZJ8I5oXXvVJS?autoplay=1"
-          title="Letstok Social Tutorial"
+          title="LetsPost Tutorial"
           allow="autoplay"
           allowFullScreen
         />
@@ -123,7 +123,7 @@ export const FirstBillingComponent = () => {
           {t('billing_who_use', 'who use')}{' '}
           {t(
             'billing_postiz_grow_social',
-            'Letstok Social To Grow Their Social Presence'
+            'LetsPost To Grow Their Social Presence'
           )}
         </div>
 
@@ -138,7 +138,7 @@ export const FirstBillingComponent = () => {
                 alt="YouTube"
               />
             </div>
-            <div>See the power of Letstok Social (click here)</div>
+            <div>See the power of LetsPost (click here)</div>
           </div>
         </div>
 

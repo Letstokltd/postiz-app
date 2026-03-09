@@ -8,7 +8,7 @@ import { getT } from '@gitroom/react/translation/get.translation.service.backend
 import { LoginWithOidc } from '@gitroom/frontend/components/auth/login.with.oidc';
 
 export const metadata: Metadata = {
-  title: `${isGeneralServerSide() ? 'Letstok Social' : 'Gitroom'} Register`,
+  title: `${isGeneralServerSide() ? 'LetsPost' : 'Gitroom'} Register`,
   description: '',
 };
 
