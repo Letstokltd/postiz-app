@@ -110,11 +110,21 @@ export class IntegrationService {
     timezone?: number,
     customInstanceDetails?: string
   ) {
-    const uploadedPicture = picture
-      ? picture?.indexOf('imagedelivery.net') > -1
-        ? picture
-        : await this.storage.uploadSimple(picture)
-      : undefined;
+    let uploadedPicture: string | undefined;
+    if (picture) {
+      if (picture.indexOf('imagedelivery.net') > -1) {
+        uploadedPicture = picture;
+      } else {
+        try {
+          uploadedPicture = await this.storage.uploadSimple(picture);
+        } catch (err) {
+          console.warn(
+            `[IntegrationService] Failed to download profile picture, using original URL: ${(err as Error).message}`
+          );
+          uploadedPicture = picture;
+        }
+      }
+    }
 
     return this._integrationRepository.createOrUpdateIntegration(
       additionalSettings,

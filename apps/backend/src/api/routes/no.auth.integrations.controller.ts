@@ -61,12 +61,18 @@ export class NoAuthIntegrationsController {
       ? 'none'
       : await ioRedis.get(`login:${body.state}`);
     if (!getCodeVerifier) {
-      throw new Error('Invalid state');
+      console.error(
+        `[social-connect] Invalid state: ${body.state} for provider ${integration}`
+      );
+      throw new HttpException('Invalid or expired state', 400);
     }
 
     const organization = await ioRedis.get(`organization:${body.state}`);
     if (!organization) {
-      throw new Error('Organization not found');
+      console.error(
+        `[social-connect] Organization not found for state: ${body.state}`
+      );
+      throw new HttpException('Organization not found for this state', 400);
     }
 
     const org = await this._organizationService.getOrgById(organization);
