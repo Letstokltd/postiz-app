@@ -112,7 +112,14 @@ export class IntegrationService {
   ) {
     let uploadedPicture: string | undefined;
     if (picture) {
-      if (picture.indexOf('imagedelivery.net') > -1) {
+      const isAlreadyHosted =
+        picture.indexOf('imagedelivery.net') > -1 ||
+        (process.env.CLOUDFLARE_BUCKET_URL &&
+          picture.indexOf(process.env.CLOUDFLARE_BUCKET_URL) > -1) ||
+        (process.env.FRONTEND_URL &&
+          picture.indexOf(process.env.FRONTEND_URL) > -1);
+
+      if (isAlreadyHosted || process.env.STORAGE_PROVIDER === 'local') {
         uploadedPicture = picture;
       } else {
         try {

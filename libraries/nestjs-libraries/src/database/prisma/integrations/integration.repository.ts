@@ -143,12 +143,22 @@ export class IntegrationRepository {
   }
 
   async updateIntegration(id: string, params: Partial<Integration>) {
-    if (
-      params.picture &&
-      (params.picture.indexOf(process.env.CLOUDFLARE_BUCKET_URL!) === -1 ||
-        params.picture.indexOf(process.env.FRONTEND_URL!) === -1)
-    ) {
-      params.picture = await this.storage.uploadSimple(params.picture);
+    if (params.picture) {
+      const isAlreadyHosted =
+        (process.env.CLOUDFLARE_BUCKET_URL &&
+          params.picture.indexOf(process.env.CLOUDFLARE_BUCKET_URL) > -1) ||
+        (process.env.FRONTEND_URL &&
+          params.picture.indexOf(process.env.FRONTEND_URL) > -1);
+
+      if (!isAlreadyHosted && process.env.STORAGE_PROVIDER !== 'local') {
+        try {
+          params.picture = await this.storage.uploadSimple(params.picture);
+        } catch (err) {
+          console.warn(
+            `[IntegrationRepository] Failed to download profile picture, keeping original URL: ${(err as Error).message}`
+          );
+        }
+      }
     }
 
     const existing = await this._integration.model.integration.findUnique({
