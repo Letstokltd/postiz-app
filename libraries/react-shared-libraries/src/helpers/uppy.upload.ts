@@ -93,6 +93,7 @@ export const getUppyUploadPlugin = (
         },
       };
     case 'local':
+    case 'gcs':
       return {
         plugin: XHRUpload,
         options: {
@@ -101,7 +102,6 @@ export const getUppyUploadPlugin = (
         },
       };
 
-    // Add more cases for other cloud providers
     default:
       throw new Error(`Unsupported storage provider: ${provider}`);
   }
