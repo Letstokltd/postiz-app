@@ -30,6 +30,12 @@ export class ThirdPartyRepository {
     });
   }
 
+  getByIdentifier(org: string, identifier: string) {
+    return this._thirdParty.model.thirdParty.findFirst({
+      where: { organizationId: org, identifier, deletedAt: null },
+    });
+  }
+
   saveIntegration(
     org: string,
     identifier: string,

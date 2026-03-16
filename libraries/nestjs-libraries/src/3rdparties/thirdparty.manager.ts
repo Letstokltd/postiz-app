@@ -5,6 +5,7 @@ import {
 } from '@gitroom/nestjs-libraries/3rdparties/thirdparty.interface';
 import { ModuleRef } from '@nestjs/core';
 import { ThirdPartyService } from '@gitroom/nestjs-libraries/database/prisma/third-party/third-party.service';
+import { AuthService } from '@gitroom/helpers/auth/auth.service';
 
 @Injectable()
 export class ThirdPartyManager {
@@ -58,5 +59,19 @@ export class ThirdPartyManager {
       apiKey,
       data
     );
+  }
+
+  async getApiKeyByOrgAndIdentifier(
+    org: string,
+    identifier: string
+  ): Promise<string | null> {
+    const record = await this._thirdPartyService.getByIdentifier(
+      org,
+      identifier
+    );
+    if (!record?.apiKey) {
+      return null;
+    }
+    return AuthService.fixedDecryption(record.apiKey);
   }
 }

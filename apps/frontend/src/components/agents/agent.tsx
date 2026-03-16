@@ -196,6 +196,48 @@ export const AgentList: FC<{ onChange: (arr: any[]) => void }> = ({
   );
 };
 
+const useOpenAiStatus = () => {
+  const fetch = useFetch();
+  const load = useCallback(async () => {
+    const res = await fetch('/third-party');
+    const list = await res.json();
+    return list.some((p: any) => p.identifier === 'openai');
+  }, []);
+
+  return useSWR('openai-connected', load, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    revalidateIfStale: false,
+    revalidateOnMount: true,
+    refreshWhenHidden: false,
+    refreshWhenOffline: false,
+  });
+};
+
+const OpenAiBanner: FC = () => {
+  const { data: isConnected, isLoading } = useOpenAiStatus();
+  const t = useT();
+
+  if (isLoading || isConnected) return null;
+
+  return (
+    <div className="bg-yellow-900/30 border border-yellow-700/50 text-yellow-200 text-[13px] px-[16px] py-[10px] flex items-center gap-[8px] rounded-[8px] mx-[20px] mt-[10px]">
+      <span>
+        {t(
+          'openai_not_connected',
+          'OpenAI API key is not connected. Connect it in'
+        )}
+      </span>
+      <Link
+        href="/third-party"
+        className="underline font-[500] hover:text-yellow-100"
+      >
+        {t('integrations', 'Integrations')}
+      </Link>
+    </div>
+  );
+};
+
 export const PropertiesContext = createContext({ properties: [] });
 export const Agent: FC<{ children: ReactNode }> = ({ children }) => {
   const [properties, setProperties] = useState([]);
@@ -203,7 +245,10 @@ export const Agent: FC<{ children: ReactNode }> = ({ children }) => {
   return (
     <PropertiesContext.Provider value={{ properties }}>
       <AgentList onChange={setProperties} />
-      <div className="bg-newBgColorInner flex flex-1">{children}</div>
+      <div className="bg-newBgColorInner flex flex-1 flex-col">
+        <OpenAiBanner />
+        <div className="flex flex-1">{children}</div>
+      </div>
       <Threads />
     </PropertiesContext.Provider>
   );
