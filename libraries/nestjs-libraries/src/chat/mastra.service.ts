@@ -23,4 +23,16 @@ export class MastraService {
 
     return MastraService.mastra;
   }
+
+  async mastraWithApiKey(apiKey: string) {
+    return new Mastra({
+      storage: pStore,
+      agents: {
+        'letstok-social': await this._loadToolsService.agent(apiKey),
+      },
+      logger: new ConsoleLogger({
+        level: 'info',
+      }),
+    });
+  }
 }

@@ -167,7 +167,7 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                               href={studioToolsUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center gap-2 rounded-md border border-newSep px-3 py-1.5 text-sm font-semibold text-textItemBlur transition-all hover:border-btnPrimary/50 hover:text-btnPrimary"
+                              className="flex items-center gap-2 rounded-full border border-[#612bd3]/20 bg-gradient-to-r from-[#f24462]/10 via-[#d671cb]/10 to-[#612bd3]/10 px-4 py-1.5 text-sm font-semibold text-[#612bd3] transition-all duration-300 ease-in-out hover:from-[#f24462]/20 hover:via-[#d671cb]/20 hover:to-[#612bd3]/20 hover:border-[#612bd3]/40 hover:shadow-[0_0_12px_rgba(97,43,211,0.15)] hover:scale-105"
                               title="Create AI-powered video ads & content"
                             >
                               <img
@@ -175,7 +175,7 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                                 alt="Letstok AI"
                                 width={20}
                                 height={20}
-                                className="rounded-sm"
+                                className="rounded-sm drop-shadow-sm"
                               />
                               <span>Letstok AI</span>
                             </a>

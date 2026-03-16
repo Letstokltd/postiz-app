@@ -12,7 +12,7 @@ export interface ThirdPartyParams {
   identifier: string;
   title: string;
   description: string;
-  position: 'media' | 'webhook';
+  position: 'media' | 'webhook' | 'ai';
   fields: {
     name: string;
     description: string;

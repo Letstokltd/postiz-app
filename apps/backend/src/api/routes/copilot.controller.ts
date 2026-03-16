@@ -1,5 +1,5 @@
 import {
-  Logger,
+  HttpException,
   Controller,
   Get,
   Post,
@@ -14,11 +14,13 @@ import {
   copilotRuntimeNodeHttpEndpoint,
   copilotRuntimeNextJSAppRouterEndpoint,
 } from '@copilotkit/runtime';
+import OpenAI from 'openai';
 import { GetOrgFromRequest } from '@gitroom/nestjs-libraries/user/org.from.request';
 import { Organization } from '@prisma/client';
 import { SubscriptionService } from '@gitroom/nestjs-libraries/database/prisma/subscriptions/subscription.service';
 import { MastraAgent } from '@ag-ui/mastra';
 import { MastraService } from '@gitroom/nestjs-libraries/chat/mastra.service';
+import { ThirdPartyManager } from '@gitroom/nestjs-libraries/3rdparties/thirdparty.manager';
 import { Request, Response } from 'express';
 import { RuntimeContext } from '@mastra/core/di';
 import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
@@ -34,16 +36,30 @@ export type ChannelsContext = {
 export class CopilotController {
   constructor(
     private _subscriptionService: SubscriptionService,
-    private _mastraService: MastraService
+    private _mastraService: MastraService,
+    private _thirdPartyManager: ThirdPartyManager
   ) {}
+
+  private async resolveOpenAiKey(orgId: string): Promise<string | null> {
+    const orgKey = await this._thirdPartyManager.getApiKeyByOrgAndIdentifier(
+      orgId,
+      'openai'
+    );
+    return orgKey || process.env.OPENAI_API_KEY || null;
+  }
+
   @Post('/chat')
-  chatAgent(@Req() req: Request, @Res() res: Response) {
-    if (
-      process.env.OPENAI_API_KEY === undefined ||
-      process.env.OPENAI_API_KEY === ''
-    ) {
-      Logger.warn('OpenAI API key not set, chat functionality will not work');
-      return;
+  async chatAgent(
+    @Req() req: Request,
+    @Res() res: Response,
+    @GetOrgFromRequest() organization: Organization
+  ) {
+    const apiKey = await this.resolveOpenAiKey(organization.id);
+    if (!apiKey) {
+      throw new HttpException(
+        'OpenAI API key not configured. Add your key in Integrations.',
+        400
+      );
     }
 
     const copilotRuntimeHandler = copilotRuntimeNodeHttpEndpoint({
@@ -51,6 +67,7 @@ export class CopilotController {
       runtime: new CopilotRuntime(),
       serviceAdapter: new OpenAIAdapter({
         model: 'gpt-4.1',
+        openai: new OpenAI({ apiKey }) as any,
       }),
     });
 
@@ -64,14 +81,15 @@ export class CopilotController {
     @Res() res: Response,
     @GetOrgFromRequest() organization: Organization
   ) {
-    if (
-      process.env.OPENAI_API_KEY === undefined ||
-      process.env.OPENAI_API_KEY === ''
-    ) {
-      Logger.warn('OpenAI API key not set, chat functionality will not work');
-      return;
+    const apiKey = await this.resolveOpenAiKey(organization.id);
+    if (!apiKey) {
+      throw new HttpException(
+        'OpenAI API key not configured. Add your key in Integrations.',
+        400
+      );
     }
-    const mastra = await this._mastraService.mastra();
+
+    const mastra = await this._mastraService.mastraWithApiKey(apiKey);
     const runtimeContext = new RuntimeContext<ChannelsContext>();
     runtimeContext.set(
       'integrations',
@@ -95,9 +113,9 @@ export class CopilotController {
     const copilotRuntimeHandler = copilotRuntimeNextJSAppRouterEndpoint({
       endpoint: '/copilot/agent',
       runtime,
-      // properties: req.body.variables.properties,
       serviceAdapter: new OpenAIAdapter({
         model: 'gpt-4.1',
+        openai: new OpenAI({ apiKey }) as any,
       }),
     });
 
