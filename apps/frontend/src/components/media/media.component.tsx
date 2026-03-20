@@ -498,7 +498,7 @@ export const MediaBox: FC<{
                 {[...new Array(16)].map((_, i) => (
                   <div
                     className={clsx(
-                      'px-[3px] py-[3px] float-left rounded-[6px] cursor-pointer w8-max aspect-square'
+                      'px-[3px] py-[3px] float-left rounded-[6px] cursor-pointer w8-max aspect-[9/16]'
                     )}
                     key={i}
                   >
@@ -519,7 +519,7 @@ export const MediaBox: FC<{
               .map((media: any) => (
                 <div
                   className={clsx(
-                    'group px-[3px] py-[3px] float-left rounded-[6px] w8-max aspect-square',
+                    'group px-[3px] py-[3px] float-left rounded-[6px] w8-max aspect-[9/16]',
                     !standalone && 'cursor-pointer'
                   )}
                   key={media.id}

@@ -212,7 +212,7 @@ export const MainBillingComponent: FC<{
   sub?: Subscription;
 }> = (props) => {
   const { sub } = props;
-  const { isGeneral } = useVariables();
+  const { isGeneral, studioToolsUrl } = useVariables();
   const { mutate } = useSWRConfig();
   const fetch = useFetch();
   const toast = useToaster();
@@ -224,6 +224,15 @@ export const MainBillingComponent: FC<{
   const track = useTrack();
   const t = useT();
   const queryParams = useSearchParams();
+
+  useEffect(() => {
+    if (isGeneral) {
+      const pricingUrl = studioToolsUrl
+        ? `${studioToolsUrl}/pricing`
+        : 'https://studio-tools.letstok.com/pricing';
+      window.location.href = pricingUrl;
+    }
+  }, [isGeneral, studioToolsUrl]);
   const [finishTrial, setFinishTrial] = useState(
     !!queryParams.get('finishTrial')
   );
@@ -443,6 +452,9 @@ export const MainBillingComponent: FC<{
       },
     [monthlyOrYearly, subscription, user, utm]
   );
+  if (isGeneral) {
+    return null;
+  }
   if (user?.isLifetime) {
     router.replace('/');
     return null;

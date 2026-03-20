@@ -1,12 +1,54 @@
 'use client';
 
-import { FC, useCallback, useState } from 'react';
+import { FC, useCallback, useRef, useState } from 'react';
 import { useFetch } from '@gitroom/helpers/utils/custom.fetch';
 import useSWR from 'swr';
 import clsx from 'clsx';
 import { LoadingComponent } from '@gitroom/frontend/components/layout/loading';
 import { useModals } from '@gitroom/frontend/components/layout/new-modal';
 import { useToaster } from '@gitroom/react/toaster/toaster';
+
+const PreviewOverlay: FC<{
+  item: { fileUrl: string; posterUrl?: string };
+  isVideo: boolean;
+  onClose: () => void;
+}> = ({ item, isVideo, onClose }) => {
+  return (
+    <div
+      className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 cursor-pointer z-[201] w-10 h-10 rounded-full bg-white/20 hover:bg-white/40 backdrop-blur-sm flex items-center justify-center transition-colors"
+      >
+        <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+      <div
+        className="max-w-[400px] max-h-[85vh] rounded-lg overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {isVideo ? (
+          <video
+            src={item.fileUrl}
+            poster={item.posterUrl}
+            className="w-full h-full object-contain"
+            controls
+            autoPlay
+          />
+        ) : (
+          <img
+            src={item.fileUrl}
+            className="w-full h-full object-contain"
+            alt=""
+          />
+        )}
+      </div>
+    </div>
+  );
+};
 
 const MediaCard: FC<{
   item: {
@@ -19,76 +61,115 @@ const MediaCard: FC<{
   isSelected: boolean;
   onClick: () => void;
 }> = ({ item, isSelected, onClick }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const url = item.fileUrl?.split('?')[0] || '';
   const isVideo =
     item.type === 'Video' || url.endsWith('.mp4') || url.endsWith('.mov');
 
+  const handlePlay = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setShowPreview(true);
+    },
+    []
+  );
+
   return (
-    <div
-      onClick={onClick}
-      className={clsx(
-        'w-full cursor-pointer rounded-lg overflow-hidden border-2 transition-all hover:opacity-80',
-        isSelected ? 'border-[#612BD3] shadow-lg' : 'border-transparent'
+    <>
+      {showPreview && (
+        <PreviewOverlay
+          item={item}
+          isVideo={isVideo}
+          onClose={() => setShowPreview(false)}
+        />
       )}
-    >
-      <div className="relative aspect-video bg-black/10">
-        {isVideo ? (
-          item.posterUrl ? (
-            <img
-              src={item.posterUrl}
-              className="w-full h-full object-cover"
-              alt=""
-            />
-          ) : (
+      <div
+        onClick={onClick}
+        className={clsx(
+          'w-full cursor-pointer rounded-lg overflow-hidden border-2 transition-all hover:opacity-80',
+          isSelected ? 'border-[#612BD3] shadow-lg' : 'border-transparent'
+        )}
+      >
+        <div className="relative aspect-[9/16] bg-black/10 group/card">
+          {isVideo ? (
             <video
+              ref={videoRef}
               src={item.fileUrl}
+              poster={item.posterUrl}
               className="w-full h-full object-cover"
               muted
               preload="metadata"
+              playsInline
+              loop
+              onMouseEnter={() => videoRef.current?.play().catch(() => {})}
+              onMouseLeave={() => {
+                if (videoRef.current) {
+                  videoRef.current.pause();
+                  videoRef.current.currentTime = 0;
+                }
+              }}
             />
-          )
-        ) : (
-          <img
-            src={item.fileUrl}
-            className="w-full h-full object-cover"
-            alt=""
-          />
-        )}
-        {isVideo && (
-          <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-[6px] py-[2px] rounded">
-            VIDEO
-          </div>
-        )}
-        {isSelected && (
-          <div className="absolute inset-0 bg-[#612BD3]/20 flex items-center justify-center">
-            <svg
-              className="w-8 h-8 text-[#612BD3]"
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
-              <path
-                fillRule="evenodd"
-                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </div>
-        )}
+          ) : (
+            <img
+              src={item.fileUrl}
+              className="w-full h-full object-cover"
+              alt=""
+            />
+          )}
+
+          <button
+            onClick={handlePlay}
+            className="cursor-pointer absolute top-1.5 left-1.5 z-10 w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity"
+            title="Preview"
+          >
+            {isVideo ? (
+              <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+              </svg>
+            )}
+          </button>
+
+          {isVideo && (
+            <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-[6px] py-[2px] rounded">
+              VIDEO
+            </div>
+          )}
+          {isSelected && (
+            <div className="absolute inset-0 bg-[#612BD3]/20 flex items-center justify-center pointer-events-none">
+              <svg
+                className="w-8 h-8 text-[#612BD3]"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+          )}
+        </div>
+        <div className="p-2 text-xs text-textColor/70">
+          <span className="capitalize">{item.type}</span>
+          {' \u00b7 '}
+          {new Date(item.createdAt).toLocaleDateString()}
+        </div>
       </div>
-      <div className="p-2 text-xs text-textColor/70">
-        <span className="capitalize">{item.type}</span>
-        {' \u00b7 '}
-        {new Date(item.createdAt).toLocaleDateString()}
-      </div>
-    </div>
+    </>
   );
 };
 
 type TabKey = 'gallery' | 'ai-agent';
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: 'gallery', label: 'Gallery' },
   { key: 'ai-agent', label: 'AI Generated' },
+  { key: 'gallery', label: 'Gallery' },
 ];
 
 const MediaGrid: FC<{
@@ -96,7 +177,8 @@ const MediaGrid: FC<{
   source: TabKey;
   selectedItems: any[];
   toggleItem: (item: any) => void;
-}> = ({ integrationId, source, selectedItems, toggleItem }) => {
+  refreshKey: number;
+}> = ({ integrationId, source, selectedItems, toggleItem, refreshKey }) => {
   const fetch = useFetch();
   const [page, setPage] = useState(1);
 
@@ -107,10 +189,10 @@ const MediaGrid: FC<{
         body: JSON.stringify({ source, page }),
       })
     ).json();
-  }, [integrationId, source, page]);
+  }, [integrationId, source, page, refreshKey]);
 
   const { data, isLoading } = useSWR(
-    `letstok-gallery-${integrationId}-${source}-p${page}`,
+    `letstok-gallery-${integrationId}-${source}-p${page}-r${refreshKey}`,
     loadMedia,
     {
       revalidateOnFocus: false,
@@ -161,7 +243,7 @@ const MediaGrid: FC<{
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-3 gap-3 max-h-[50vh] overflow-y-auto pr-1">
+      <div className="grid grid-cols-4 gap-3 max-h-[50vh] overflow-y-auto pr-1">
         {items.map((item: any) => (
           <MediaCard
             key={item.id}
@@ -216,7 +298,9 @@ const LetstokGalleryModal: FC<{
   const toaster = useToaster();
   const [selectedItems, setSelectedItems] = useState<any[]>([]);
   const [isImporting, setIsImporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabKey>('gallery');
+  const [activeTab, setActiveTab] = useState<TabKey>('ai-agent');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const toggleItem = useCallback((item: any) => {
     setSelectedItems((prev) => {
@@ -278,21 +362,50 @@ const LetstokGalleryModal: FC<{
         </div>
       )}
 
-      <div className="flex gap-[2px] border-b border-newTextColor/10">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={clsx(
-              'cursor-pointer px-[16px] py-[10px] text-[14px] font-[500] transition-colors border-b-2 -mb-px',
-              activeTab === tab.key
-                ? 'border-[#612BD3] text-[#612BD3]'
-                : 'border-transparent text-textColor/60 hover:text-textColor'
-            )}
+      <div className="flex items-center border-b border-newTextColor/10">
+        <div className="flex gap-[2px] flex-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={clsx(
+                'cursor-pointer px-[16px] py-[10px] text-[14px] font-[500] transition-colors border-b-2 -mb-px',
+                activeTab === tab.key
+                  ? 'border-[#612BD3] text-[#612BD3]'
+                  : 'border-transparent text-textColor/60 hover:text-textColor'
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => {
+            setIsRefreshing(true);
+            setRefreshKey((k) => k + 1);
+            setTimeout(() => setIsRefreshing(false), 1000);
+          }}
+          disabled={isRefreshing}
+          title="Refresh"
+          className={clsx(
+            'cursor-pointer p-2 rounded-md text-textColor/60 hover:text-textColor hover:bg-newTextColor/5 transition-colors -mb-px',
+            isRefreshing && 'opacity-50 cursor-not-allowed'
+          )}
+        >
+          <svg
+            className={clsx('w-4 h-4', isRefreshing && 'animate-spin')}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
           >
-            {tab.label}
-          </button>
-        ))}
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+        </button>
       </div>
 
       <MediaGrid
@@ -300,6 +413,7 @@ const LetstokGalleryModal: FC<{
         source={activeTab}
         selectedItems={selectedItems}
         toggleItem={toggleItem}
+        refreshKey={refreshKey}
       />
 
       <div className="flex justify-end gap-[8px]">

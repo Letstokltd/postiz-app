@@ -97,4 +97,21 @@ export class PlanSyncService {
     const cacheKey = `${CACHE_KEY_PREFIX}${firebaseUid}`;
     await ioRedis.del(cacheKey);
   }
+
+  async getOrgIdByFirebaseUid(firebaseUid: string): Promise<string | null> {
+    const user = await this._prisma.user.findFirst({
+      where: {
+        providerName: Provider.FIREBASE,
+        providerId: firebaseUid,
+      },
+      include: {
+        organizations: {
+          where: { disabled: false },
+          select: { organizationId: true },
+          take: 1,
+        },
+      },
+    });
+    return user?.organizations?.[0]?.organizationId ?? null;
+  }
 }

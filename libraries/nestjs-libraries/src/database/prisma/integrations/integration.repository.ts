@@ -561,6 +561,7 @@ export class IntegrationRepository {
         disabled: false,
         deletedAt: null,
       },
+      orderBy: { createdAt: 'desc' },
       take: totalChannels,
       select: {
         id: true,
@@ -577,6 +578,8 @@ export class IntegrationRepository {
         },
       });
     }
+
+    return getChannels.length;
   }
 
   getPlugsByIntegrationId(org: string, id: string) {
