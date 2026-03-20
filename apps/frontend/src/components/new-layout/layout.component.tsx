@@ -86,6 +86,44 @@ const PlanBadge = () => {
   );
 };
 
+const UpgradeBadge = () => {
+  const { data: plan } = usePlan();
+  const { studioToolsUrl, isGeneral } = useVariables();
+  const planName = plan?.planName || 'Free';
+
+  if (planName !== 'Free') return null;
+
+  const pricingUrl = studioToolsUrl
+    ? `${studioToolsUrl}/pricing`
+    : isGeneral
+      ? 'https://studio-tools.letstok.com/pricing'
+      : '/billing';
+
+  return (
+    <a
+      href={pricingUrl}
+      target={studioToolsUrl || isGeneral ? '_blank' : undefined}
+      rel={studioToolsUrl || isGeneral ? 'noopener noreferrer' : undefined}
+      className="inline-flex items-center gap-[6px] rounded-full px-[14px] py-[6px] text-[12px] font-semibold text-white shadow-sm transition-all duration-200 hover:shadow-md hover:brightness-110 active:scale-95"
+      style={{
+        backgroundImage:
+          'linear-gradient(135deg, #f24462, #f1335f 49%, #ffc444)',
+      }}
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+      >
+        <path d="M11 21h-1l1-7H7.5c-.88 0-.33-.75-.31-.78C8.48 10.94 10.42 7.54 13.01 3h1l-1 7h3.51c.4 0 .62.19.4.66C12.97 17.55 11 21 11 21z" />
+      </svg>
+      Upgrade
+    </a>
+  );
+};
+
 const jakartaSans = Plus_Jakarta_Sans({
   weight: ['600', '500', '700'],
   style: ['normal', 'italic'],
@@ -137,7 +175,7 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
               )}
             >
               <div>{user?.admin ? <Impersonate /> : <div />}</div>
-              {user.tier === 'FREE' && isGeneral && billingEnabled ? (
+              {user.tier === 'FREE' && !isGeneral && billingEnabled ? (
                 <FirstBillingComponent />
               ) : (
                 <div className="flex-1 flex gap-[8px]">
@@ -167,7 +205,7 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                               href={studioToolsUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center gap-2 rounded-full border border-[#612bd3]/20 bg-gradient-to-r from-[#f24462]/10 via-[#d671cb]/10 to-[#612bd3]/10 px-4 py-1.5 text-sm font-semibold text-[#612bd3] transition-all duration-300 ease-in-out hover:from-[#f24462]/20 hover:via-[#d671cb]/20 hover:to-[#612bd3]/20 hover:border-[#612bd3]/40 hover:shadow-[0_0_12px_rgba(97,43,211,0.15)] hover:scale-105"
+                              className="flex items-center gap-2 rounded-full border border-[#f24462]/20 bg-gradient-to-r from-[#f24462]/10 via-[#f1335f]/8 to-[#ffc444]/10 px-[14px] py-[5px] text-sm font-semibold text-[#f24462] transition-all duration-300 ease-in-out hover:from-[#f24462]/20 hover:via-[#f1335f]/15 hover:to-[#ffc444]/20 hover:border-[#f24462]/40 hover:shadow-[0_0_12px_rgba(242,68,98,0.15)] hover:scale-105"
                               title="Create AI-powered video ads & content"
                             >
                               <img
@@ -182,6 +220,7 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                             <div className="w-[1px] h-[20px] bg-blockSeparator" />
                           </>
                         )}
+                        <UpgradeBadge />
                         <PlanBadge />
                         <div className="w-[1px] h-[20px] bg-blockSeparator" />
                         <StreakComponent />
