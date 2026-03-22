@@ -9,6 +9,7 @@ export const Logo = () => {
       alt="LetsPost"
       width={80}
       height={80}
+      priority
       className="mt-[8px] min-w-[60px] min-h-[60px] w-auto h-auto object-contain dark:invert"
     />
   );

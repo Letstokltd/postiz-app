@@ -1,6 +1,6 @@
 'use client';
 
-import React, { ReactNode, useCallback } from 'react';
+import React, { ReactNode, useCallback, useEffect, useState } from 'react';
 import { Logo } from '@gitroom/frontend/components/new-layout/logo';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 const ModeComponent = dynamic(
@@ -124,6 +124,61 @@ const UpgradeBadge = () => {
   );
 };
 
+const MobileWarning = () => {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    const dismissed = sessionStorage.getItem('mobile-warning-dismissed');
+    if (!dismissed && window.innerWidth < 768) {
+      setShow(true);
+    }
+  }, []);
+
+  if (!show) return null;
+
+  const handleContinue = () => {
+    sessionStorage.setItem('mobile-warning-dismissed', '1');
+    setShow(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-6">
+      <div className="flex flex-col items-center gap-6 rounded-2xl bg-newBgColorInner p-8 text-center shadow-2xl max-w-[340px]">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="48"
+          height="48"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="text-textItemBlur"
+        >
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+          <line x1="12" y1="18" x2="12.01" y2="18" />
+        </svg>
+        <div>
+          <h2 className="text-[18px] font-[700] text-newTextColor mb-2">
+            Desktop Recommended
+          </h2>
+          <p className="text-[14px] text-textItemBlur leading-relaxed">
+            This app is optimized for desktop screens. For the best experience,
+            please switch to a computer.
+          </p>
+        </div>
+        <button
+          onClick={handleContinue}
+          className="w-full rounded-lg border border-newColColor px-4 py-2.5 text-[14px] font-[500] text-newTextColor transition-colors hover:bg-newBgColorInner/80"
+        >
+          Continue anyway
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const jakartaSans = Plus_Jakarta_Sans({
   weight: ['600', '500', '700'],
   style: ['normal', 'italic'],
@@ -152,6 +207,7 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
 
   return (
     <ContextWrapper user={user}>
+      <MobileWarning />
       <CopilotKit
         credentials="include"
         runtimeUrl={backendUrl + '/copilot/chat'}

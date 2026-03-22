@@ -24,7 +24,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
   isBetweenSteps = false;
   convertToJPEG = true;
   scopes = [
-    'video.list',
+    // 'video.list', // TODO: re-enable once scope is approved by TikTok
     'user.info.basic',
     'video.publish',
     'video.upload',
@@ -600,80 +600,84 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
         }
       }
 
-      // Get recent videos and aggregate their stats
-      const videoListResponse = await this.fetch(
-        'https://open.tiktokapis.com/v2/video/list/?fields=id',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({ max_count: 20 }),
-        }
-      );
-
-      const videoListData = await videoListResponse.json();
-      const videos = videoListData?.data?.videos;
-
-      if (videos && videos.length > 0) {
-        const videoIds = videos.map((v: { id: string }) => v.id);
-
-        // Query video details to get engagement metrics
-        const videoQueryResponse = await this.fetch(
-          'https://open.tiktokapis.com/v2/video/query/?fields=id,like_count,comment_count,share_count,view_count',
+      // TODO: re-enable once video.list scope is approved by TikTok
+      // Video list/query analytics require the video.list scope
+      try {
+        const videoListResponse = await this.fetch(
+          'https://open.tiktokapis.com/v2/video/list/?fields=id',
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${accessToken}`,
             },
-            body: JSON.stringify({
-              filters: { video_ids: videoIds },
-            }),
-          }
+            body: JSON.stringify({ max_count: 20 }),
+          },
         );
 
-        const videoQueryData = await videoQueryResponse.json();
-        const videoDetails = videoQueryData?.data?.videos;
+        const videoListData = await videoListResponse.json();
+        const videos = videoListData?.data?.videos;
 
-        if (videoDetails && videoDetails.length > 0) {
-          let totalViews = 0;
-          let totalLikes = 0;
-          let totalComments = 0;
-          let totalShares = 0;
+        if (videos && videos.length > 0) {
+          const videoIds = videos.map((v: { id: string }) => v.id);
 
-          for (const video of videoDetails) {
-            totalViews += video.view_count || 0;
-            totalLikes += video.like_count || 0;
-            totalComments += video.comment_count || 0;
-            totalShares += video.share_count || 0;
+          const videoQueryResponse = await this.fetch(
+            'https://open.tiktokapis.com/v2/video/query/?fields=id,like_count,comment_count,share_count,view_count',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({
+                filters: { video_ids: videoIds },
+              }),
+            },
+          );
+
+          const videoQueryData = await videoQueryResponse.json();
+          const videoDetails = videoQueryData?.data?.videos;
+
+          if (videoDetails && videoDetails.length > 0) {
+            let totalViews = 0;
+            let totalLikes = 0;
+            let totalComments = 0;
+            let totalShares = 0;
+
+            for (const video of videoDetails) {
+              totalViews += video.view_count || 0;
+              totalLikes += video.like_count || 0;
+              totalComments += video.comment_count || 0;
+              totalShares += video.share_count || 0;
+            }
+
+            result.push({
+              label: 'Views',
+              percentageChange: 0,
+              data: [{ total: String(totalViews), date: today }],
+            });
+
+            result.push({
+              label: 'Recent Likes',
+              percentageChange: 0,
+              data: [{ total: String(totalLikes), date: today }],
+            });
+
+            result.push({
+              label: 'Recent Comments',
+              percentageChange: 0,
+              data: [{ total: String(totalComments), date: today }],
+            });
+
+            result.push({
+              label: 'Recent Shares',
+              percentageChange: 0,
+              data: [{ total: String(totalShares), date: today }],
+            });
           }
-
-          result.push({
-            label: 'Views',
-            percentageChange: 0,
-            data: [{ total: String(totalViews), date: today }],
-          });
-
-          result.push({
-            label: 'Recent Likes',
-            percentageChange: 0,
-            data: [{ total: String(totalLikes), date: today }],
-          });
-
-          result.push({
-            label: 'Recent Comments',
-            percentageChange: 0,
-            data: [{ total: String(totalComments), date: today }],
-          });
-
-          result.push({
-            label: 'Recent Shares',
-            percentageChange: 0,
-            data: [{ total: String(totalShares), date: today }],
-          });
         }
+      } catch {
+        // video.list scope not approved yet — skip video analytics
       }
 
       return result;
@@ -714,8 +718,8 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       return [];
     }
 
+    // TODO: re-enable once video.list scope is approved by TikTok
     try {
-      // Query video details using the video ID
       const response = await this.fetch(
         'https://open.tiktokapis.com/v2/video/query/?fields=id,like_count,comment_count,share_count,view_count',
         {
@@ -729,7 +733,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
               video_ids: post?.data?.publicaly_available_post_id.map(String),
             },
           }),
-        }
+        },
       );
 
       const data = await response.json();
@@ -774,8 +778,8 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       }
 
       return result;
-    } catch (err) {
-      console.error('Error fetching TikTok post analytics:', err);
+    } catch {
+      // video.list scope not approved yet — skip post analytics
       return [];
     }
   }
