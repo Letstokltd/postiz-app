@@ -29,7 +29,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     'video.publish',
     'video.upload',
     'user.info.profile',
-    'user.info.stats',
+    // 'user.info.stats', // TODO: re-enable once scope is approved by TikTok
   ];
   override maxConcurrentJob = 1; // TikTok has strict video upload limits
   dto = TikTokDto;
@@ -550,54 +550,58 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     const today = dayjs().format('YYYY-MM-DD');
 
     try {
-      // Get user stats (follower_count, following_count, likes_count, video_count)
-      const userStatsResponse = await this.fetch(
-        'https://open.tiktokapis.com/v2/user/info/?fields=follower_count,following_count,likes_count,video_count',
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
-      );
-
-      const userStatsData = await userStatsResponse.json();
-      const userStats = userStatsData?.data?.user;
-
       const result: AnalyticsData[] = [];
 
-      if (userStats) {
-        if (userStats.follower_count !== undefined) {
-          result.push({
-            label: 'Followers',
-            percentageChange: 0,
-            data: [{ total: String(userStats.follower_count), date: today }],
-          });
-        }
+      // TODO: re-enable once user.info.stats scope is approved by TikTok
+      try {
+        const userStatsResponse = await this.fetch(
+          'https://open.tiktokapis.com/v2/user/info/?fields=follower_count,following_count,likes_count,video_count',
+          {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          },
+        );
 
-        if (userStats.following_count !== undefined) {
-          result.push({
-            label: 'Following',
-            percentageChange: 0,
-            data: [{ total: String(userStats.following_count), date: today }],
-          });
-        }
+        const userStatsData = await userStatsResponse.json();
+        const userStats = userStatsData?.data?.user;
 
-        if (userStats.likes_count !== undefined) {
-          result.push({
-            label: 'Total Likes',
-            percentageChange: 0,
-            data: [{ total: String(userStats.likes_count), date: today }],
-          });
-        }
+        if (userStats) {
+          if (userStats.follower_count !== undefined) {
+            result.push({
+              label: 'Followers',
+              percentageChange: 0,
+              data: [{ total: String(userStats.follower_count), date: today }],
+            });
+          }
 
-        if (userStats.video_count !== undefined) {
-          result.push({
-            label: 'Videos',
-            percentageChange: 0,
-            data: [{ total: String(userStats.video_count), date: today }],
-          });
+          if (userStats.following_count !== undefined) {
+            result.push({
+              label: 'Following',
+              percentageChange: 0,
+              data: [{ total: String(userStats.following_count), date: today }],
+            });
+          }
+
+          if (userStats.likes_count !== undefined) {
+            result.push({
+              label: 'Total Likes',
+              percentageChange: 0,
+              data: [{ total: String(userStats.likes_count), date: today }],
+            });
+          }
+
+          if (userStats.video_count !== undefined) {
+            result.push({
+              label: 'Videos',
+              percentageChange: 0,
+              data: [{ total: String(userStats.video_count), date: today }],
+            });
+          }
         }
+      } catch {
+        // user.info.stats scope not approved yet — skip user stats
       }
 
       // TODO: re-enable once video.list scope is approved by TikTok
