@@ -38,6 +38,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const Plausible = !!process.env.STRIPE_PUBLISHABLE_KEY
     ? PlausibleProvider
     : Fragment;
+  const plausibleProps = !!process.env.STRIPE_PUBLISHABLE_KEY
+    ? { domain: !!process.env.IS_GENERAL ? 'social.letstok.com' : 'gitroom.com' }
+    : {};
   return (
     <html>
       <head>
@@ -95,9 +98,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
             <HtmlComponent />
             <DubAnalytics />
             <FacebookComponent />
-            <Plausible
-              domain={!!process.env.IS_GENERAL ? 'social.letstok.com' : 'gitroom.com'}
-            >
+            <Plausible {...plausibleProps}>
               <PHProvider
                 phkey={process.env.NEXT_PUBLIC_POSTHOG_KEY}
                 host={process.env.NEXT_PUBLIC_POSTHOG_HOST}
