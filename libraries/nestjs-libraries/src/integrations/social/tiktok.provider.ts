@@ -426,6 +426,17 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     }
   }
 
+  private rewriteMediaUrl(url: string): string {
+    const gcsBucketName = process.env.GCS_BUCKET_NAME;
+    const frontendUrl = process.env.FRONTEND_URL;
+    if (!url || !gcsBucketName || !frontendUrl) return url;
+    const gcsPrefix = `https://storage.googleapis.com/${gcsBucketName}/`;
+    if (url.startsWith(gcsPrefix)) {
+      return url.replace(gcsPrefix, `${frontendUrl}/media/`);
+    }
+    return url;
+  }
+
   private postingMethod(
     method: TikTokDto['content_posting_method'],
     isPhoto: boolean
@@ -499,7 +510,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
               ? {
                   source_info: {
                     source: 'PULL_FROM_URL',
-                    video_url: firstPost?.media?.[0]?.path!,
+                    video_url: this.rewriteMediaUrl(firstPost?.media?.[0]?.path!),
                     ...(firstPost?.media?.[0]?.thumbnailTimestamp!
                       ? {
                           video_cover_timestamp_ms:
@@ -512,7 +523,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
                   source_info: {
                     source: 'PULL_FROM_URL',
                     photo_cover_index: 0,
-                    photo_images: firstPost.media?.map((p) => p.path),
+                    photo_images: firstPost.media?.map((p) => this.rewriteMediaUrl(p.path)),
                   },
                   post_mode:
                     firstPost?.settings?.content_posting_method ===
