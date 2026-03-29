@@ -432,7 +432,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     if (!url || !gcsBucketName || !frontendUrl) return url;
     const gcsPrefix = `https://storage.googleapis.com/${gcsBucketName}/`;
     if (url.startsWith(gcsPrefix)) {
-      return url.replace(gcsPrefix, `${frontendUrl}/media/`);
+      return url.replace(gcsPrefix, `${frontendUrl}/gcs-proxy/`);
     }
     return url;
   }
