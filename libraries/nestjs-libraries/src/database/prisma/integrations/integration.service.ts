@@ -215,6 +215,13 @@ export class IntegrationService {
       false,
       'info'
     );
+
+    this._notificationService
+      .sendAdminNotification(
+        `[Postiz] Channel Refresh Error: ${integration.providerIdentifier}`,
+        `<p>Organization <b>${orgId}</b> failed to refresh <b>${integration.providerIdentifier}</b> channel (<b>${integration.name}</b>).</p>${err ? `<p>Error: ${err}</p>` : ''}<p>Time: ${new Date().toISOString()}</p>`
+      )
+      .catch(() => {});
   }
 
   async refreshNeeded(org: string, id: string) {

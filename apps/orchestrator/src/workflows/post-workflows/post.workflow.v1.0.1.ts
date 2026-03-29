@@ -31,6 +31,7 @@ const proxyTaskQueue = (taskQueue: string) => {
 const {
   getPostsList,
   inAppNotification,
+  sendAdminNotification,
   changeState,
   updatePost,
   sendWebhooks,
@@ -105,6 +106,10 @@ export async function postWorkflowV101({
       false,
       'info'
     );
+    await sendAdminNotification(
+      `[Postiz] Post Failed: ${post.integration?.providerIdentifier} needs reconnection`,
+      `<p>Post failed for org <b>${post.organizationId}</b> on <b>${post.integration?.providerIdentifier}</b> channel <b>${post.integration?.name}</b>.</p><p>Reason: Channel needs reconnection.</p>`
+    ).catch(() => {});
     return;
   }
 
@@ -118,6 +123,10 @@ export async function postWorkflowV101({
       false,
       'info'
     );
+    await sendAdminNotification(
+      `[Postiz] Post Failed: ${post.integration?.providerIdentifier} is disabled`,
+      `<p>Post failed for org <b>${post.organizationId}</b> on <b>${post.integration?.providerIdentifier}</b> channel <b>${post.integration?.name}</b>.</p><p>Reason: Channel is disabled.</p>`
+    ).catch(() => {});
     return;
   }
 
@@ -226,13 +235,20 @@ export async function postWorkflowV101({
             false,
             'fail'
           );
+          await sendAdminNotification(
+            `[Postiz] Post Error: ${post.integration?.providerIdentifier}`,
+            `<p>Post failed for org <b>${post.organizationId}</b> on <b>${post.integration?.providerIdentifier}</b> channel <b>${post.integration?.name}</b>.</p><p>Error: ${err?.cause?.message || 'bad_body'}</p>`
+          ).catch(() => {});
           return false;
         }
       }
     }
 
     if (postsResults.length === before) {
-      // all retries exhausted without success
+      await sendAdminNotification(
+        `[Postiz] Post Failed: ${post.integration?.providerIdentifier} (retries exhausted)`,
+        `<p>Post failed for org <b>${post.organizationId}</b> on <b>${post.integration?.providerIdentifier}</b> channel <b>${post.integration?.name}</b>.</p><p>Reason: All retries exhausted without success.</p>`
+      ).catch(() => {});
       return false;
     }
   }

@@ -104,6 +104,12 @@ export class NotificationService {
     await this._emailService.sendEmail(to, subject, html, 'top', replyTo);
   }
 
+  async sendAdminNotification(subject: string, html: string) {
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!adminEmail) return;
+    await this.sendEmail(adminEmail, subject, html);
+  }
+
   hasEmailProvider() {
     return this._emailService.hasProvider();
   }

@@ -222,6 +222,11 @@ export class PostActivity {
   }
 
   @ActivityMethod()
+  async sendAdminNotification(subject: string, html: string) {
+    return this._notificationService.sendAdminNotification(subject, html);
+  }
+
+  @ActivityMethod()
   async globalPlugs(integration: Integration) {
     return this._postService.checkPlugs(
       integration.organizationId,

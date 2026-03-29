@@ -23,6 +23,7 @@ import {
 } from '@gitroom/backend/services/auth/permissions/permission.exception.class';
 import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
 import { OrganizationService } from '@gitroom/nestjs-libraries/database/prisma/organizations/organization.service';
+import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.service';
 
 @ApiTags('Integrations')
 @Controller('/integrations')
@@ -31,7 +32,8 @@ export class NoAuthIntegrationsController {
     private _integrationManager: IntegrationManager,
     private _integrationService: IntegrationService,
     private _refreshIntegrationService: RefreshIntegrationService,
-    private _organizationService: OrganizationService
+    private _organizationService: OrganizationService,
+    private _notificationService: NotificationService
   ) {}
 
   @Get('/')
@@ -182,10 +184,22 @@ export class NoAuthIntegrationsController {
     });
 
     if (error) {
+      this._notificationService
+        .sendAdminNotification(
+          `[Postiz] Channel Connection Error: ${integration}`,
+          `<p>Organization <b>${org.name}</b> failed to connect <b>${integration}</b>.</p><p>Error: ${error}</p><p>Time: ${new Date().toISOString()}</p>`
+        )
+        .catch(() => {});
       throw new NotEnoughScopes(error);
     }
 
     if (!id) {
+      this._notificationService
+        .sendAdminNotification(
+          `[Postiz] Channel Connection Error: ${integration}`,
+          `<p>Organization <b>${org.name}</b> failed to connect <b>${integration}</b>.</p><p>Error: Invalid API key</p><p>Time: ${new Date().toISOString()}</p>`
+        )
+        .catch(() => {});
       throw new NotEnoughScopes('Invalid API key');
     }
 
@@ -250,6 +264,13 @@ export class NoAuthIntegrationsController {
       .catch((err) => {
         console.log(err);
       });
+
+    this._notificationService
+      .sendAdminNotification(
+        `[Postiz] Channel Connected: ${integration}`,
+        `<p>Organization <b>${org.name}</b> connected a <b>${integration}</b> channel (<b>${validName}</b>).</p><p>Time: ${new Date().toISOString()}</p>`
+      )
+      .catch(() => {});
 
     // Fetch pages if this is a two-step provider and not a refresh
     let pages: any[] = [];
@@ -331,7 +352,20 @@ export class NoAuthIntegrationsController {
 
     const org = await this._organizationService.getOrgById(organization);
 
-    return this._integrationService.saveProviderPage(org.id, id, body);
+    const result = await this._integrationService.saveProviderPage(
+      org.id,
+      id,
+      body
+    );
+
+    this._notificationService
+      .sendAdminNotification(
+        `[Postiz] Channel Page Selected`,
+        `<p>Organization <b>${org.name}</b> completed a two-step channel connection (provider page/company selected).</p><p>Time: ${new Date().toISOString()}</p>`
+      )
+      .catch(() => {});
+
+    return result;
   }
 
   @Post('/extension-refresh')
