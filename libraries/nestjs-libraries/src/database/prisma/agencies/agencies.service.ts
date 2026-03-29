@@ -84,8 +84,7 @@ export class AgenciesService {
 
   async createAgency(user: User, body: CreateAgencyDto) {
     const agency = await this._agenciesRepository.createAgency(user, body);
-    await this._notificationService.sendEmail(
-      'nevo@social.letstok.com',
+    await this._notificationService.sendAdminNotification(
       'New agency created',
       `
 <html lang="en">
