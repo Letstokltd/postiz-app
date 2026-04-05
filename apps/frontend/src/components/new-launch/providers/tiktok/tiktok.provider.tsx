@@ -2,6 +2,7 @@
 
 import {
   FC,
+  useEffect,
   useMemo,
 } from 'react';
 import {
@@ -21,11 +22,11 @@ import { TiktokPreview } from '@gitroom/frontend/components/new-launch/providers
 const TikTokSettings: FC<{
   values?: any;
 }> = (props) => {
-  const { watch, register } = useSettings();
+  const { watch, register, setValue } = useSettings();
   const { value } = useIntegration();
   const t = useT();
 
-  const isTitle = useMemo(() => {
+  const isPhoto = useMemo(() => {
     return value?.[0]?.image?.some((p) => (p?.path?.indexOf?.('mp4') ?? -1) === -1);
   }, [value]);
 
@@ -33,7 +34,14 @@ const TikTokSettings: FC<{
   const brand_organic_toggle = watch('brand_organic_toggle');
   const brand_content_toggle = watch('brand_content_toggle');
   const content_posting_method = watch('content_posting_method');
+  const privacy_level = watch('privacy_level');
   const isUploadMode = content_posting_method === 'UPLOAD';
+
+  useEffect(() => {
+    if (brand_content_toggle && privacy_level === 'SELF_ONLY') {
+      setValue('privacy_level', '');
+    }
+  }, [brand_content_toggle]);
 
   const privacyLevel = [
     {
@@ -83,18 +91,23 @@ const TikTokSettings: FC<{
   return (
     <div className="flex flex-col">
       {/*<CheckTikTokValidity picture={props?.values?.[0]?.image?.[0]?.path} />*/}
-      {isTitle && <Input label="Title" {...register('title')} maxLength={90} />}
+      <Input label="Title" {...register('title')} maxLength={90} />
       <Select
         label={t('label_who_can_see_this_video', 'Who can see this video?')}
         disabled={isUploadMode}
-        {...register('privacy_level', {
-          value: 'PUBLIC_TO_EVERYONE',
-        })}
+        {...register('privacy_level')}
       >
         <option value="">{t('select', 'Select')}</option>
         {privacyLevel.map((item) => (
-          <option key={item.value} value={item.value}>
+          <option
+            key={item.value}
+            value={item.value}
+            disabled={brand_content_toggle && item.value === 'SELF_ONLY'}
+          >
             {item.label}
+            {brand_content_toggle && item.value === 'SELF_ONLY'
+              ? ` (${t('branded_content_not_private', 'not available for branded content')})`
+              : ''}
           </option>
         ))}
       </Select>
@@ -147,25 +160,29 @@ const TikTokSettings: FC<{
           variant="hollow"
           disabled={isUploadMode}
           {...register('comment', {
-            value: true,
-          })}
-        />
-        <Checkbox
-          variant="hollow"
-          label={t('label_duet', 'Duet')}
-          disabled={isUploadMode}
-          {...register('duet', {
             value: false,
           })}
         />
-        <Checkbox
-          label={t('label_stitch', 'Stitch')}
-          variant="hollow"
-          disabled={isUploadMode}
-          {...register('stitch', {
-            value: false,
-          })}
-        />
+        {!isPhoto && (
+          <Checkbox
+            variant="hollow"
+            label={t('label_duet', 'Duet')}
+            disabled={isUploadMode}
+            {...register('duet', {
+              value: false,
+            })}
+          />
+        )}
+        {!isPhoto && (
+          <Checkbox
+            label={t('label_stitch', 'Stitch')}
+            variant="hollow"
+            disabled={isUploadMode}
+            {...register('stitch', {
+              value: false,
+            })}
+          />
+        )}
       </div>
       <hr className="my-[15px] mb-[25px] border-tableBorder" />
       <div className="flex flex-col gap-[20px]">
@@ -178,13 +195,13 @@ const TikTokSettings: FC<{
         />
         <Checkbox
           variant="hollow"
-          label={t('label_disclose_video_content', 'Disclose Video Content')}
+          label={t('label_disclose_commercial_content', 'Disclose commercial content')}
           disabled={isUploadMode}
           {...register('disclose', {
             value: false,
           })}
         />
-        {disclose && (
+        {disclose && (brand_organic_toggle || brand_content_toggle) && (
           <div className="bg-tableBorder p-[10px] mt-[10px] rounded-[10px] flex gap-[20px] items-center">
             <div>
               <svg
@@ -201,10 +218,15 @@ const TikTokSettings: FC<{
               </svg>
             </div>
             <div>
-              {t(
-                'your_video_will_be_labeled_promotional',
-                'Your video will be labeled "Promotional Content".'
-              )}
+              {brand_content_toggle
+                ? t(
+                    'your_video_will_be_labeled_paid_partnership',
+                    'Your video will be labeled "Paid partnership".'
+                  )
+                : t(
+                    'your_video_will_be_labeled_promotional',
+                    'Your video will be labeled "Promotional content".'
+                  )}
               <br />
               {t(
                 'this_cannot_be_changed_once_posted',
@@ -213,10 +235,18 @@ const TikTokSettings: FC<{
             </div>
           </div>
         )}
+        {disclose && !brand_organic_toggle && !brand_content_toggle && (
+          <div className="text-[14px] mt-[5px] text-[#FF9800]">
+            {t(
+              'you_need_to_indicate_content_type',
+              'You need to indicate if your content promotes yourself, a third party, or both.'
+            )}
+          </div>
+        )}
         <div className="text-[14px] my-[10px] text-balance">
           {t(
             'turn_on_to_disclose_video_promotes',
-            'Turn on to disclose that this video promotes goods or services in\n          exchange for something of value. You video could promote yourself, a\n          third party, or both.'
+            'Turn on to disclose that this video promotes goods or services in\n          exchange for something of value. Your video could promote yourself, a\n          third party, or both.'
           )}
         </div>
       </div>
@@ -232,12 +262,16 @@ const TikTokSettings: FC<{
         <div className="text-balance my-[10px] text-[14px]">
           {t(
             'you_are_promoting_yourself',
-            'You are promoting yourself or your own brand.'
+            'You are promoting yourself or your own business.'
           )}
-          <br />
-          {t(
-            'this_video_will_be_classified_brand_organic',
-            'This video will be classified as Brand Organic.'
+          {brand_organic_toggle && !brand_content_toggle && (
+            <>
+              <br />
+              {t(
+                'your_video_labeled_promotional',
+                'Your video will be labeled as "Promotional content".'
+              )}
+            </>
           )}
         </div>
         <Checkbox
@@ -253,41 +287,44 @@ const TikTokSettings: FC<{
             'you_are_promoting_another_brand',
             'You are promoting another brand or a third party.'
           )}
-          <br />
-          {t(
-            'this_video_will_be_classified_branded_content',
-            'This video will be classified as Branded Content.'
+          {brand_content_toggle && (
+            <>
+              <br />
+              {t(
+                'your_video_labeled_paid_partnership',
+                'Your video will be labeled as "Paid partnership".'
+              )}
+            </>
           )}
         </div>
-        {(brand_organic_toggle || brand_content_toggle) && (
-          <div className="my-[10px] text-[14px] text-balance">
-            {t(
-              'by_posting_you_agree_to_tiktoks',
-              "By posting, you agree to TikTok's"
-            )}
-            {[
-              brand_organic_toggle || brand_content_toggle ? (
-                <a
-                  target="_blank"
-                  className="text-[#B69DEC] hover:underline"
-                  href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en"
-                >
-                  {t('music_usage_confirmation', 'Music Usage Confirmation')}
-                </a>
-              ) : undefined,
-              brand_content_toggle ? <> {t('and', 'and')} </> : undefined,
-              brand_content_toggle ? (
-                <a
-                  target="_blank"
-                  className="text-[#B69DEC] hover:underline"
-                  href="https://www.tiktok.com/legal/page/global/bc-policy/en"
-                >
-                  {t('branded_content_policy', 'Branded Content Policy')}
-                </a>
-              ) : undefined,
-            ].filter((f) => f)}
-          </div>
+      </div>
+      <hr className="my-[15px] border-tableBorder" />
+      <div className="my-[10px] text-[14px] text-balance">
+        {t(
+          'by_posting_you_agree_to_tiktoks',
+          "By posting, you agree to TikTok's"
+        )}{' '}
+        {brand_content_toggle && (
+          <>
+            <a
+              target="_blank"
+              className="text-[#B69DEC] hover:underline"
+              href="https://www.tiktok.com/legal/page/global/bc-policy/en"
+            >
+              {t('branded_content_policy', 'Branded Content Policy')}
+            </a>
+            {' '}
+            {t('and', 'and')}{' '}
+          </>
         )}
+        <a
+          target="_blank"
+          className="text-[#B69DEC] hover:underline"
+          href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en"
+        >
+          {t('music_usage_confirmation', 'Music Usage Confirmation')}
+        </a>
+        .
       </div>
     </div>
   );
@@ -299,7 +336,8 @@ export default withProvider({
   comments: false,
   CustomPreviewComponent: TiktokPreview,
   dto: TikTokDto,
-  checkValidity: async (items) => {
+  checkValidity: async (items, settings) => {
+    const s = settings as TikTokDto & { disclose?: boolean };
     const [firstItems] = items ?? [];
     if ((firstItems?.length ?? 0) === 0) {
       return 'No video / images selected';
@@ -314,6 +352,19 @@ export default withProvider({
       (firstItems?.[0]?.path?.indexOf?.('mp4') ?? -1) > -1
     ) {
       return 'You need one media';
+    }
+    if (
+      s.disclose &&
+      !s.brand_organic_toggle &&
+      !s.brand_content_toggle
+    ) {
+      return 'You need to indicate if your content promotes yourself, a third party, or both.';
+    }
+    if (
+      s.brand_content_toggle &&
+      s.privacy_level === 'SELF_ONLY'
+    ) {
+      return 'Branded content visibility cannot be set to private.';
     }
     return true;
   },

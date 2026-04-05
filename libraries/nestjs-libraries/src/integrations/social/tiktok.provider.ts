@@ -477,12 +477,12 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
               'DIRECT_POST') === 'DIRECT_POST'
               ? {
                   post_info: {
-                    ...((firstPost?.settings?.title && isPhoto) ||
-                    (firstPost.message && !isPhoto)
+                    ...((firstPost?.settings?.title ||
+                    (firstPost.message && !isPhoto))
                       ? {
-                          title: isPhoto
-                            ? firstPost.settings.title
-                            : firstPost.message,
+                          title:
+                            firstPost.settings.title ||
+                            (isPhoto ? '' : firstPost.message),
                         }
                       : {}),
                     ...(isPhoto ? { description: firstPost.message } : {}),
