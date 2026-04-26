@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   ValidationPipe,
 } from '@nestjs/common';
 import { PostsRepository } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.repository';
@@ -44,6 +45,7 @@ type PostWithConditionals = Post & {
 
 @Injectable()
 export class PostsService {
+  private readonly logger = new Logger(PostsService.name);
   private storage = UploadFactory.createStorage();
   constructor(
     private _postRepository: PostsRepository,
@@ -604,7 +606,14 @@ export class PostsService {
             },
           ]),
         });
-    } catch (err) {}
+    } catch (err) {
+      this.logger.error(
+        `Failed to start post workflow post_${postId} (org ${orgId}, queue ${taskQueue}): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        err instanceof Error ? err.stack : undefined
+      );
+    }
   }
 
   async createPost(orgId: string, body: CreatePostDto): Promise<any[]> {
@@ -686,7 +695,14 @@ export class PostsService {
           orgId,
           getPostById.state === 'DRAFT' ? 'DRAFT' : 'QUEUE'
         );
-      } catch (err) {}
+      } catch (err) {
+        this.logger.error(
+          `startWorkflow failed after changeDate for post ${getPostById.id}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+          err instanceof Error ? err.stack : undefined
+        );
+      }
     }
 
     return newDate;
