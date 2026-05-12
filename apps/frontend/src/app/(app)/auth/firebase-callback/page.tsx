@@ -9,7 +9,8 @@ function setCookie(name: string, value: string, days: number) {
   if (typeof document === 'undefined') return;
   const d = new Date();
   d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
-  document.cookie = name + '=' + value + ';expires=' + d.toUTCString() + ';path=/';
+  document.cookie =
+    name + '=' + value + ';expires=' + d.toUTCString() + ';path=/';
 }
 
 export default function FirebaseCallbackPage() {
@@ -24,6 +25,11 @@ export default function FirebaseCallbackPage() {
       return;
     }
 
+    // Drop token from the address bar (still in memory for this request only).
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', '/auth/firebase-callback');
+    }
+
     fetchData('/auth/firebase-sso', {
       method: 'POST',
       body: JSON.stringify({ token }),
@@ -34,8 +40,7 @@ export default function FirebaseCallbackPage() {
           throw new Error(text || 'Firebase SSO failed');
         }
 
-        const authHeader =
-          res.headers.get('auth') || res.headers.get('Auth');
+        const authHeader = res.headers.get('auth') || res.headers.get('Auth');
         if (authHeader) {
           setCookie('auth', authHeader, 365);
         }

@@ -22,7 +22,9 @@ async function start() {
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
     cors: {
-      ...(!process.env.NOT_SECURED ? { credentials: true } : {}),
+      // Required for cross-origin fetch (e.g. Studio → /auth/firebase-sso) with
+      // credentials: 'include' so Set-Cookie is accepted; origins must be explicit.
+      credentials: true,
       allowedHeaders: [
         'Content-Type',
         'Authorization',
@@ -36,9 +38,14 @@ async function start() {
         ...(process.env.NOT_SECURED ? ['auth', 'showorg', 'impersonate'] : []),
       ],
       origin: [
-        process.env.FRONTEND_URL,
+        ...(process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : []),
         'http://localhost:6274',
+        'http://localhost:3000',
+        'http://localhost:3001',
         ...(process.env.MAIN_URL ? [process.env.MAIN_URL] : []),
+        ...(process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL
+          ? [process.env.NEXT_PUBLIC_STUDIO_TOOLS_URL]
+          : []),
       ],
     },
   });
