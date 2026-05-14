@@ -13,6 +13,28 @@ function setCookie(name: string, value: string, days: number) {
     name + '=' + value + ';expires=' + d.toUTCString() + ';path=/';
 }
 
+/** LetsTok Studio sends `redirect` — only relative in-app URLs are accepted. */
+function safeRedirect(raw: string | null): string {
+  const fallback = '/launches';
+  if (!raw) {
+    return fallback;
+  }
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw.trim());
+  } catch {
+    return fallback;
+  }
+  if (
+    !decoded.startsWith('/') ||
+    decoded.startsWith('//') ||
+    decoded.includes('://')
+  ) {
+    return fallback;
+  }
+  return decoded || fallback;
+}
+
 export default function FirebaseCallbackPage() {
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +42,7 @@ export default function FirebaseCallbackPage() {
 
   useEffect(() => {
     const token = searchParams.get('token');
+    const afterAuthHref = safeRedirect(searchParams.get('redirect'));
     if (!token) {
       setError('Missing token. Please try logging in again.');
       return;
@@ -45,12 +68,12 @@ export default function FirebaseCallbackPage() {
           setCookie('auth', authHeader, 365);
         }
 
-        window.location.href = '/launches';
+        window.location.href = afterAuthHref;
       })
       .catch((e) => {
         setError(e?.message || 'Unable to sign in. Please try again.');
       });
-  }, [searchParams]);
+  }, [searchParams, fetchData]);
 
   if (error) {
     return (
