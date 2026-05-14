@@ -34,6 +34,7 @@ import { MonitorController } from '@gitroom/backend/api/routes/monitor.controlle
 import { NoAuthIntegrationsController } from '@gitroom/backend/api/routes/no.auth.integrations.controller';
 import { EnterpriseController } from '@gitroom/backend/api/routes/enterprise.controller';
 import { InternalController } from '@gitroom/backend/api/routes/internal.controller';
+import { LetstokComposeController } from '@gitroom/backend/api/routes/letstok-compose.controller';
 
 const authenticatedController = [
   UsersController,
@@ -50,6 +51,7 @@ const authenticatedController = [
   AutopostController,
   SetsController,
   ThirdPartyController,
+  LetstokComposeController,
 ];
 @Module({
   imports: [UploadModule],
