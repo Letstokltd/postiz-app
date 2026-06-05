@@ -12,6 +12,9 @@ import {
   Sections,
   SubscriptionException,
 } from '@gitroom/backend/services/auth/permissions/permission.exception.class';
+import axios from 'axios';
+import { Readable } from 'stream';
+import { lookup } from 'mime-types';
 
 @Injectable()
 export class MediaService {
@@ -54,6 +57,58 @@ export class MediaService {
 
   saveFile(org: string, fileName: string, filePath: string, originalName?: string) {
     return this._mediaRepository.saveFile(org, fileName, filePath, originalName);
+  }
+
+  /**
+   * Download a remote asset and store it as an org media row.
+   * Shared by the authenticated /media/import-from-url route and the internal
+   * publish endpoint. Returns the saved media (incl. `id` and `path`).
+   */
+  async importFromUrl(org: string, url: string, originalName?: string) {
+    if (!url) {
+      throw new HttpException('url is required', 400);
+    }
+
+    let response;
+    try {
+      response = await axios.get(url, {
+        responseType: 'arraybuffer',
+        maxRedirects: 10,
+        timeout: 60000,
+        validateStatus: (status) => status < 400,
+      });
+    } catch (err: any) {
+      console.error(
+        `[importFromUrl] Failed to fetch URL: ${url.substring(0, 200)}...`,
+        `Status: ${err?.response?.status}`,
+        `Message: ${err?.message}`
+      );
+      throw new HttpException(
+        `Failed to fetch media from URL (${err?.response?.status || err?.message})`,
+        err?.response?.status || 500
+      );
+    }
+
+    const buffer = Buffer.from(response.data);
+    const cleanUrl = url.split('?')[0];
+    const mime = lookup(cleanUrl) || 'video/mp4';
+    const ext = cleanUrl.split('.').pop() || 'mp4';
+    const name = originalName || `letstok-import-${Date.now()}.${ext}`;
+
+    const getFile = await this.storage.uploadFile({
+      buffer,
+      mimetype: mime,
+      size: buffer.length,
+      path: '',
+      fieldname: '',
+      destination: '',
+      stream: new Readable(),
+      filename: '',
+      originalname: name,
+      encoding: '',
+    });
+
+    return this.saveFile(org, getFile.originalname, getFile.path, name);
   }
 
   getMedia(org: string, page: number) {
