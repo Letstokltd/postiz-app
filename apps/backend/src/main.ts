@@ -29,6 +29,7 @@ async function start() {
         'Content-Type',
         'Authorization',
         'x-copilotkit-runtime-client-gql-version',
+        'x-letstok-interop',
       ],
       exposedHeaders: [
         'reload',

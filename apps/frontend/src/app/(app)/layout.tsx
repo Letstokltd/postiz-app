@@ -63,7 +63,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         )}
       </head>
       <body
-        className={clsx(jakartaSans.className, 'dark text-primary !bg-primary')}
+        className={clsx(jakartaSans.className, 'light text-primary !bg-primary')}
       >
         <VariableContextComponent
           storageProvider={

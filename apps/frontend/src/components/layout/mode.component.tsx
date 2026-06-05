@@ -6,8 +6,11 @@ import EventEmitter from 'events';
 
 export const modeEmitter = new EventEmitter();
 
+/** First-visit default — matches Letstok Studio (light). */
+export const DEFAULT_APP_MODE = 'light' as const;
+
 const ModeComponent = () => {
-  const [mode, setMode] = useCookie('mode', 'dark');
+  const [mode, setMode] = useCookie('mode', DEFAULT_APP_MODE);
 
   const changeMode = useCallback(() => {
     modeEmitter.emit('mode', mode === 'dark' ? 'light' : 'dark');

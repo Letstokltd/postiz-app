@@ -27,6 +27,7 @@ import { LetstokLaunchesDeepLink } from '@gitroom/frontend/components/launches/l
 import { useT } from '@gitroom/react/translation/get.transation.service.client';
 import { useIntegrationList } from '@gitroom/frontend/components/launches/helpers/use.integration.list';
 import useCookie from 'react-use-cookie';
+import { DEFAULT_APP_MODE } from '@gitroom/frontend/components/layout/mode.component';
 import { Onboarding } from '@gitroom/frontend/components/onboarding/onboarding';
 
 export const SVGLine = () => {
@@ -363,7 +364,7 @@ export const LaunchesComponent = () => {
   const t = useT();
   const [reload, setReload] = useState(false);
   const [collapseMenu, setCollapseMenu] = useCookie('collapseMenu', '0');
-  const [mode] = useCookie('mode', 'dark');
+  const [mode] = useCookie('mode', DEFAULT_APP_MODE);
   const { isLoading, data: integrations, mutate } = useIntegrationList();
 
   const totalNonDisabledChannels = useMemo(() => {
