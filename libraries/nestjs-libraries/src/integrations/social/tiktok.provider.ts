@@ -442,11 +442,13 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     isPhoto: boolean
   ): string {
     switch (method) {
-      case 'UPLOAD':
-        return isPhoto ? '/content/init/' : '/inbox/video/init/';
       case 'DIRECT_POST':
-      default:
         return isPhoto ? '/content/init/' : '/video/init/';
+      case 'UPLOAD':
+      default:
+        // Default to self-upload (draft / inbox). Direct posting requires the
+        // TikTok "direct post" permission, which is not granted yet.
+        return isPhoto ? '/content/init/' : '/inbox/video/init/';
     }
   }
 
@@ -473,8 +475,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
-            ...((firstPost?.settings?.content_posting_method ||
-              'DIRECT_POST') === 'DIRECT_POST'
+            ...(firstPost?.settings?.content_posting_method === 'DIRECT_POST'
               ? {
                   post_info: {
                     ...((firstPost?.settings?.title ||
