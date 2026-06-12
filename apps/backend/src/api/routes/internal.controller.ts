@@ -12,6 +12,8 @@ import { IntegrationRepository } from '@gitroom/nestjs-libraries/database/prisma
 import { NotificationService } from '@gitroom/nestjs-libraries/database/prisma/notifications/notification.service';
 import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/posts.service';
 import { MediaService } from '@gitroom/nestjs-libraries/database/prisma/media/media.service';
+import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
+import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
 
 /** Random id for post/value/image blocks (mirrors the frontend publish client). */
 function makeId(len: number): string {
@@ -67,6 +69,7 @@ export class InternalController {
     private _notificationService: NotificationService,
     private _postsService: PostsService,
     private _mediaService: MediaService,
+    private _integrationManager: IntegrationManager,
   ) {}
 
   private assertInternalKey(apiKey: string): void {
@@ -189,9 +192,33 @@ export class InternalController {
         name: i.name,
         identifier: i.providerIdentifier,
         picture: i.picture,
+        // Per-network caption character limit, so callers can keep posts compliant.
+        maxLength: this.safeMaxLength(i.providerIdentifier),
       }));
 
     return { success: true, integrations };
+  }
+
+  /** Best-effort per-provider caption char limit (null if unknown). */
+  private safeMaxLength(identifier: string): number | null {
+    try {
+      const provider = this._integrationManager.getSocialIntegration(identifier);
+      const len = (provider as any)?.maxLength?.();
+      return typeof len === 'number' ? len : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Caption character limits for all supported networks (for pre-connect guidance). */
+  @Post('/network-limits')
+  async networkLimits(@Headers('x-internal-api-key') apiKey: string) {
+    this.assertInternalKey(apiKey);
+    const limits: Record<string, number | null> = {};
+    for (const network of this._integrationManager.getAllowedSocialsIntegrations()) {
+      limits[network] = this.safeMaxLength(network);
+    }
+    return { success: true, limits };
   }
 
   /**
@@ -304,5 +331,191 @@ export class InternalController {
         message: err?.response?.message ?? err?.message ?? 'Publish failed',
       };
     }
+  }
+
+  /** Return the OAuth URL the user clicks to connect a social channel. */
+  @Post('/connect-url')
+  async connectUrl(
+    @Headers('x-internal-api-key') apiKey: string,
+    @Body() body: { firebaseUid: string; integration: string },
+  ) {
+    this.assertInternalKey(apiKey);
+    if (!body.firebaseUid || !body.integration) {
+      return { success: false, message: 'firebaseUid and integration are required' };
+    }
+    const orgId = await this._planSyncService.getOrgIdByFirebaseUid(body.firebaseUid);
+    if (!orgId) return { success: false, message: 'No organization found' };
+    if (!this._integrationManager.getAllowedSocialsIntegrations().includes(body.integration)) {
+      return { success: false, message: `Integration "${body.integration}" is not allowed` };
+    }
+    try {
+      const provider = this._integrationManager.getSocialIntegration(body.integration);
+      const { codeVerifier, state, url } = await (provider as any).generateAuthUrl();
+      await ioRedis.set(`organization:${state}`, orgId, 'EX', 3600);
+      await ioRedis.set(`login:${state}`, codeVerifier, 'EX', 3600);
+      return { success: true, url, state };
+    } catch (err: any) {
+      this.logger.error(`connect-url failed for ${body.firebaseUid}: ${err?.message}`);
+      return { success: false, message: err?.message ?? 'Failed to generate auth url' };
+    }
+  }
+
+  /** Import a media URL into the user's Letstok Social media library. */
+  @Post('/upload-from-url')
+  async uploadFromUrl(
+    @Headers('x-internal-api-key') apiKey: string,
+    @Body() body: { firebaseUid: string; url: string; filename?: string },
+  ) {
+    this.assertInternalKey(apiKey);
+    if (!body.firebaseUid || !body.url) {
+      return { success: false, message: 'firebaseUid and url are required' };
+    }
+    const orgId = await this._planSyncService.getOrgIdByFirebaseUid(body.firebaseUid);
+    if (!orgId) return { success: false, message: 'No organization found' };
+    try {
+      const media = await this._mediaService.importFromUrl(orgId, body.url, body.filename);
+      return { success: true, media };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Upload failed' };
+    }
+  }
+
+  /** List the user's posts in a date range (also used for a calendar snapshot). */
+  @Post('/posts/list')
+  async postsList(
+    @Headers('x-internal-api-key') apiKey: string,
+    @Body() body: { firebaseUid: string; startDate: string; endDate: string; customer?: string },
+  ) {
+    this.assertInternalKey(apiKey);
+    if (!body.firebaseUid) return { success: false, message: 'firebaseUid is required' };
+    const orgId = await this._planSyncService.getOrgIdByFirebaseUid(body.firebaseUid);
+    if (!orgId) return { success: false, message: 'No organization found' };
+    try {
+      const posts = await this._postsService.getPosts(orgId, {
+        startDate: body.startDate,
+        endDate: body.endDate,
+        customer: body.customer,
+      } as any);
+      return { success: true, posts };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Failed to list posts' };
+    }
+  }
+
+  /** Delete a post (the whole group) by id. */
+  @Post('/posts/delete')
+  async postsDelete(
+    @Headers('x-internal-api-key') apiKey: string,
+    @Body() body: { firebaseUid: string; id: string },
+  ) {
+    this.assertInternalKey(apiKey);
+    if (!body.firebaseUid || !body.id) {
+      return { success: false, message: 'firebaseUid and id are required' };
+    }
+    const orgId = await this._planSyncService.getOrgIdByFirebaseUid(body.firebaseUid);
+    if (!orgId) return { success: false, message: 'No organization found' };
+    try {
+      const post = await this._postsService.getPost(orgId, body.id);
+      if (!post) return { success: false, message: 'Post not found' };
+      await this._postsService.deletePost(orgId, (post as any).group);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Failed to delete post' };
+    }
+  }
+
+  /** Analytics (click tracking) for a single post. */
+  @Post('/posts/analytics')
+  async postsAnalytics(
+    @Headers('x-internal-api-key') apiKey: string,
+    @Body() body: { firebaseUid: string; id: string },
+  ) {
+    this.assertInternalKey(apiKey);
+    if (!body.firebaseUid || !body.id) {
+      return { success: false, message: 'firebaseUid and id are required' };
+    }
+    const orgId = await this._planSyncService.getOrgIdByFirebaseUid(body.firebaseUid);
+    if (!orgId) return { success: false, message: 'No organization found' };
+    try {
+      const statistics = await this._postsService.getStatistics(orgId, body.id);
+      return { success: true, statistics };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Failed to get analytics' };
+    }
+  }
+
+  /**
+   * Platform analytics for ONE connected channel (followers, impressions,
+   * engagement, etc.) over the last `date` days. checkAnalytics only uses
+   * org.id, so the resolved orgId is enough.
+   */
+  @Post('/channel-analytics')
+  async channelAnalytics(
+    @Headers('x-internal-api-key') apiKey: string,
+    @Body() body: { firebaseUid: string; integrationId: string; date?: string },
+  ) {
+    this.assertInternalKey(apiKey);
+    if (!body.firebaseUid || !body.integrationId) {
+      return { success: false, message: 'firebaseUid and integrationId are required' };
+    }
+    const orgId = await this._planSyncService.getOrgIdByFirebaseUid(body.firebaseUid);
+    if (!orgId) return { success: false, message: 'No organization found' };
+    try {
+      const analytics = await this._integrationService.checkAnalytics(
+        { id: orgId } as any,
+        body.integrationId,
+        body.date ?? '30',
+      );
+      return { success: true, analytics };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Failed to get channel analytics' };
+    }
+  }
+
+  /**
+   * Unified analytics overview — per-channel platform analytics for ALL the
+   * user's connected social channels in one call. Each channel is returned
+   * separately (metrics differ per network); the caller composes the summary.
+   */
+  @Post('/analytics-overview')
+  async analyticsOverview(
+    @Headers('x-internal-api-key') apiKey: string,
+    @Body() body: { firebaseUid: string; date?: string },
+  ) {
+    this.assertInternalKey(apiKey);
+    if (!body.firebaseUid) return { success: false, message: 'firebaseUid is required' };
+    const orgId = await this._planSyncService.getOrgIdByFirebaseUid(body.firebaseUid);
+    if (!orgId) return { success: false, message: 'No organization found' };
+    const date = body.date ?? '30';
+    const list = await this._integrationRepository.getIntegrationsList(orgId);
+    const social = list.filter(
+      (i) => !i.disabled && !i.deletedAt && i.type === 'social',
+    );
+    const channels = await Promise.all(
+      social.map(async (i) => {
+        try {
+          const analytics = await this._integrationService.checkAnalytics(
+            { id: orgId } as any,
+            i.id,
+            date,
+          );
+          return {
+            id: i.id,
+            name: i.name,
+            identifier: i.providerIdentifier,
+            picture: i.picture,
+            analytics,
+          };
+        } catch (err: any) {
+          return {
+            id: i.id,
+            name: i.name,
+            identifier: i.providerIdentifier,
+            error: err?.message ?? 'analytics unavailable',
+          };
+        }
+      }),
+    );
+    return { success: true, days: Number(date), channels };
   }
 }

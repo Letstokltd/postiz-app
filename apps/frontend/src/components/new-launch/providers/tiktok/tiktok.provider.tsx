@@ -63,17 +63,17 @@ const TikTokSettings: FC<{
   ];
   const contentPostingMethod = [
     {
-      value: 'DIRECT_POST',
-      label: t(
-        'post_content_directly_to_tiktok',
-        'Post content directly to TikTok'
-      ),
-    },
-    {
       value: 'UPLOAD',
       label: t(
         'upload_content_to_tiktok_without_posting',
-        'Upload content to TikTok without posting it'
+        'Self upload — review & publish in the TikTok app (recommended)'
+      ),
+    },
+    {
+      value: 'DIRECT_POST',
+      label: t(
+        'post_content_directly_to_tiktok',
+        'Direct post to TikTok (coming soon)'
       ),
     },
   ];
@@ -121,7 +121,7 @@ const TikTokSettings: FC<{
       <Select
         label={t('label_content_posting_method', 'Content posting method')}
         {...register('content_posting_method', {
-          value: 'DIRECT_POST',
+          value: 'UPLOAD',
         })}
       >
         <option value="">{t('select', 'Select')}</option>
@@ -131,6 +131,21 @@ const TikTokSettings: FC<{
           </option>
         ))}
       </Select>
+      {content_posting_method === 'DIRECT_POST' ? (
+        <div className="text-[14px] mt-[8px] mb-[12px] text-balance text-[#f59e0b]">
+          {t(
+            'tiktok_direct_post_unavailable',
+            "Direct posting to TikTok isn't available yet — we're awaiting TikTok's approval. Please use “Self upload” for now; we'll enable direct posting as soon as it's approved."
+          )}
+        </div>
+      ) : (
+        <div className="text-[14px] mt-[8px] mb-[12px] text-balance">
+          {t(
+            'tiktok_self_upload_help',
+            'Your video will be uploaded as a draft to your TikTok account. Open the TikTok app on your phone, find the draft from LetsPost, and publish it from there.'
+          )}
+        </div>
+      )}
       <Select
         label={t('label_auto_add_music', 'Auto add music')}
         {...register('autoAddMusic', {

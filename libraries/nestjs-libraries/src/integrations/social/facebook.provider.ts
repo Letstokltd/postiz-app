@@ -305,6 +305,97 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
 
     let finalId = '';
     let finalUrl = '';
+
+    // Facebook Page Story (single 9:16 media). Uses the same permissions as
+    // feed posts/reels (pages_manage_posts/pages_read_engagement/pages_show_list).
+    // Note: FB Stories ignore caption text, and media must not have been used
+    // in a previously published post.
+    if (firstPost?.settings?.post_type === 'story') {
+      const media = firstPost?.media?.[0];
+      if (!media?.path) {
+        throw new Error('A Facebook story requires one image or video.');
+      }
+      const isVideoStory = (media.path?.indexOf('mp4') || -2) > -1;
+
+      if (isVideoStory) {
+        // Step 1: initialize an upload session.
+        const { video_id, upload_url } = await (
+          await this.fetch(
+            `https://graph.facebook.com/v20.0/${id}/video_stories?access_token=${accessToken}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ upload_phase: 'start' }),
+            },
+            'fb story init'
+          )
+        ).json();
+
+        // Step 2: upload the hosted video file (must be public, non-fbcdn).
+        await this.fetch(
+          upload_url ||
+            `https://rupload.facebook.com/video-upload/v20.0/${video_id}`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `OAuth ${accessToken}`,
+              file_url: media.path!,
+            },
+          },
+          'fb story upload'
+        );
+
+        // Step 3: finish / publish.
+        const finish = await (
+          await this.fetch(
+            `https://graph.facebook.com/v20.0/${id}/video_stories?access_token=${accessToken}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ video_id, upload_phase: 'finish' }),
+            },
+            'fb story finish'
+          )
+        ).json();
+        finalId = String(finish.post_id ?? video_id);
+      } else {
+        // Photo story: upload unpublished photo, then publish as a story.
+        const { id: photoId } = await (
+          await this.fetch(
+            `https://graph.facebook.com/v20.0/${id}/photos?access_token=${accessToken}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: media.path, published: false }),
+            },
+            'fb story photo upload'
+          )
+        ).json();
+
+        const finish = await (
+          await this.fetch(
+            `https://graph.facebook.com/v20.0/${id}/photo_stories?access_token=${accessToken}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ photo_id: photoId }),
+            },
+            'fb story photo finish'
+          )
+        ).json();
+        finalId = String(finish.post_id ?? photoId);
+      }
+
+      return [
+        {
+          id: firstPost.id,
+          postId: finalId,
+          releaseURL: `https://www.facebook.com/stories/${finalId}`,
+          status: 'success',
+        },
+      ];
+    }
+
     if ((firstPost?.media?.[0]?.path?.indexOf('mp4') || -2) > -1) {
       const {
         id: videoId,
