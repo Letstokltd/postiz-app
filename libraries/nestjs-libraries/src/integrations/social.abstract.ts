@@ -183,7 +183,7 @@ export abstract class SocialAbstract {
     const newGot = decodeURIComponent(got);
 
     const splitType = newGot.indexOf(',') > -1 ? ',' : ' ';
-    const gotArray = newGot.split(splitType);
+    const gotArray = newGot.split(splitType).map((scope) => scope.trim());
     if (!required.every((scope) => gotArray.includes(scope))) {
       throw new NotEnoughScopes();
     }
