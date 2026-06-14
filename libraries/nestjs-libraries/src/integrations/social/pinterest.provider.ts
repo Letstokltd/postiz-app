@@ -10,10 +10,23 @@ import { PinterestSettingsDto } from '@gitroom/nestjs-libraries/dtos/posts/provi
 import axios from 'axios';
 import FormData from 'form-data';
 import { timer } from '@gitroom/helpers/utils/timer';
-import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
+import {
+  NotEnoughScopes,
+  SocialAbstract,
+} from '@gitroom/nestjs-libraries/integrations/social.abstract';
 import dayjs from 'dayjs';
 import { Tool } from '@gitroom/nestjs-libraries/integrations/tool.decorator';
 import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
+
+function pinterestUseSandbox(): boolean {
+  return process.env.PINTEREST_USE_SANDBOX === 'true';
+}
+
+function pinterestApiBaseUrl(): string {
+  return pinterestUseSandbox()
+    ? 'https://api-sandbox.pinterest.com/v5'
+    : 'https://api.pinterest.com/v5';
+}
 
 @Rules(
   'Pinterest requires at least one media, if posting a video, you must have two attachment, one for video, one for the cover picture, When posting a video, there can be only one'
@@ -23,7 +36,9 @@ export class PinterestProvider
   implements SocialProvider
 {
   identifier = 'pinterest';
-  name = 'Pinterest';
+  get name() {
+    return pinterestUseSandbox() ? 'Pinterest (Sandbox)' : 'Pinterest';
+  }
   isBetweenSteps = false;
   scopes = [
     'boards:read',
@@ -58,27 +73,62 @@ export class PinterestProvider
     return undefined;
   }
 
+  private oauthRedirectUri() {
+    return `${process.env.FRONTEND_URL}/integrations/social/pinterest`;
+  }
+
+  private oauthBasicAuth() {
+    return `Basic ${Buffer.from(
+      `${process.env.PINTEREST_CLIENT_ID}:${process.env.PINTEREST_CLIENT_SECRET}`
+    ).toString('base64')}`;
+  }
+
+  private assertScopes(scope: string | undefined) {
+    if (!scope) {
+      console.error(
+        '[pinterest] OAuth token response missing scope field',
+        pinterestUseSandbox() ? '(sandbox)' : '(production)'
+      );
+      throw new NotEnoughScopes();
+    }
+
+    console.log(
+      `[pinterest] OAuth granted scopes (${pinterestUseSandbox() ? 'sandbox' : 'production'}):`,
+      scope
+    );
+
+    try {
+      this.checkScopes(this.scopes, scope);
+    } catch (err) {
+      if (err instanceof NotEnoughScopes) {
+        console.error(
+          '[pinterest] Missing required scopes. Required:',
+          this.scopes.join(', ')
+        );
+      }
+      throw err;
+    }
+  }
+
   async refreshToken(refreshToken: string): Promise<AuthTokenDetails> {
     const { access_token, expires_in } = await (
-      await fetch('https://api.pinterest.com/v5/oauth/token', {
+      await fetch(`${pinterestApiBaseUrl()}/oauth/token`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          Authorization: `Basic ${Buffer.from(
-            `${process.env.PINTEREST_CLIENT_ID}:${process.env.PINTEREST_CLIENT_SECRET}`
-          ).toString('base64')}`,
+          Authorization: this.oauthBasicAuth(),
         },
         body: new URLSearchParams({
           grant_type: 'refresh_token',
           refresh_token: refreshToken,
           scope: this.scopes.join(','),
-          redirect_uri: `${process.env.FRONTEND_URL}/integrations/social/pinterest`,
+          redirect_uri: this.oauthRedirectUri(),
         }),
       })
     ).json();
 
     const { id, profile_image, username } = await (
-      await fetch('https://api.pinterest.com/v5/user_account', {
+      await fetch(`${pinterestApiBaseUrl()}/user_account`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${access_token}`,
@@ -103,9 +153,9 @@ export class PinterestProvider
       url: `https://www.pinterest.com/oauth/?client_id=${
         process.env.PINTEREST_CLIENT_ID
       }&redirect_uri=${encodeURIComponent(
-        `${process.env.FRONTEND_URL}/integrations/social/pinterest`
+        this.oauthRedirectUri()
       )}&response_type=code&scope=${encodeURIComponent(
-        'boards:read,boards:write,pins:read,pins:write,user_accounts:read'
+        this.scopes.join(',')
       )}&state=${state}`,
       codeVerifier: makeId(10),
       state,
@@ -117,27 +167,38 @@ export class PinterestProvider
     codeVerifier: string;
     refresh: string;
   }) {
-    const { access_token, refresh_token, expires_in, scope } = await (
-      await fetch('https://api.pinterest.com/v5/oauth/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Authorization: `Basic ${Buffer.from(
-            `${process.env.PINTEREST_CLIENT_ID}:${process.env.PINTEREST_CLIENT_SECRET}`
-          ).toString('base64')}`,
-        },
-        body: new URLSearchParams({
-          grant_type: 'authorization_code',
-          code: params.code,
-          redirect_uri: `${process.env.FRONTEND_URL}/integrations/social/pinterest`,
-        }),
-      })
-    ).json();
+    const tokenResponse = await fetch(`${pinterestApiBaseUrl()}/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: this.oauthBasicAuth(),
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: params.code,
+        redirect_uri: this.oauthRedirectUri(),
+      }),
+    });
 
-    this.checkScopes(this.scopes, scope);
+    const tokenBody = await tokenResponse.json();
+
+    if (!tokenResponse.ok || !tokenBody.access_token) {
+      console.error(
+        '[pinterest] OAuth token exchange failed:',
+        tokenBody?.message || tokenBody?.code || tokenResponse.status,
+        pinterestUseSandbox() ? '(sandbox)' : '(production)'
+      );
+      throw new NotEnoughScopes(
+        tokenBody?.message || 'Pinterest authentication failed'
+      );
+    }
+
+    const { access_token, refresh_token, expires_in, scope } = tokenBody;
+
+    this.assertScopes(scope);
 
     const { id, profile_image, username } = await (
-      await fetch('https://api.pinterest.com/v5/user_account', {
+      await fetch(`${pinterestApiBaseUrl()}/user_account`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${access_token}`,
@@ -159,7 +220,7 @@ export class PinterestProvider
   @Tool({ description: 'List of boards', dataSchema: [] })
   async boards(accessToken: string) {
     const { items } = await (
-      await fetch('https://api.pinterest.com/v5/boards', {
+      await fetch(`${pinterestApiBaseUrl()}/boards`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -188,9 +249,15 @@ export class PinterestProvider
       (p) => (p.path?.indexOf('mp4') || -1) === -1
     );
 
+    if (findMp4 && pinterestUseSandbox()) {
+      throw new Error(
+        'Video pins are not supported in Pinterest Sandbox. Use an image pin for demo testing.'
+      );
+    }
+
     if (findMp4) {
       const { upload_url, media_id, upload_parameters } = await (
-        await this.fetch('https://api.pinterest.com/v5/media', {
+        await this.fetch(`${pinterestApiBaseUrl()}/media`, {
           method: 'POST',
           body: JSON.stringify({
             media_type: 'video',
@@ -223,7 +290,7 @@ export class PinterestProvider
       while (statusCode !== 'succeeded') {
         const mediafile = await (
           await this.fetch(
-            'https://api.pinterest.com/v5/media/' + media_id,
+            `${pinterestApiBaseUrl()}/media/${media_id}`,
             {
               method: 'GET',
               headers: {
@@ -248,7 +315,7 @@ export class PinterestProvider
     }));
 
     const { id: pId } = await (
-      await this.fetch('https://api.pinterest.com/v5/pins', {
+      await this.fetch(`${pinterestApiBaseUrl()}/pins`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -307,7 +374,7 @@ export class PinterestProvider
       all: { daily_metrics },
     } = await (
       await fetch(
-        `https://api.pinterest.com/v5/user_account/analytics?start_date=${since}&end_date=${until}`,
+        `${pinterestApiBaseUrl()}/user_account/analytics?start_date=${since}&end_date=${until}`,
         {
           method: 'GET',
           headers: {
@@ -372,7 +439,7 @@ export class PinterestProvider
     try {
       // Fetch pin analytics from Pinterest API
       const response = await this.fetch(
-        `https://api.pinterest.com/v5/pins/${postId}/analytics?start_date=${since}&end_date=${today}&metric_types=IMPRESSION,PIN_CLICK,OUTBOUND_CLICK,SAVE`,
+        `${pinterestApiBaseUrl()}/pins/${postId}/analytics?start_date=${since}&end_date=${today}&metric_types=IMPRESSION,PIN_CLICK,OUTBOUND_CLICK,SAVE`,
         {
           method: 'GET',
           headers: {

@@ -72,6 +72,8 @@ services:
       TIKTOK_CLIENT_SECRET: ''
       PINTEREST_CLIENT_ID: ''
       PINTEREST_CLIENT_SECRET: ''
+      # Set to true for Pinterest Standard upgrade demo (uses api-sandbox.pinterest.com)
+      PINTEREST_USE_SANDBOX: ${PINTEREST_USE_SANDBOX:-false}
       DRIBBBLE_CLIENT_ID: ''
       DRIBBBLE_CLIENT_SECRET: ''
       DISCORD_CLIENT_ID: ''
