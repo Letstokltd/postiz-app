@@ -86,7 +86,11 @@ export class IntegrationManager {
           isWeb3: !!p.isWeb3,
           isChromeExtension: !!p.isChromeExtension,
           ...(p.extensionCookies ? { extensionCookies: p.extensionCookies } : {}),
-          ...(p.customFields ? { customFields: await p.customFields() } : {}),
+          ...(p.customFields
+            ? await p.customFields().then((fields) =>
+                fields?.length ? { customFields: fields } : {}
+              )
+            : {}),
         }))
       ),
       article: [] as any[],

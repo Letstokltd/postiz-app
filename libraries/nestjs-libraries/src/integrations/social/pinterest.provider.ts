@@ -22,6 +22,13 @@ function pinterestUseSandbox(): boolean {
   return process.env.PINTEREST_USE_SANDBOX === 'true';
 }
 
+function pinterestSandboxManualConnect(): boolean {
+  return (
+    pinterestUseSandbox() &&
+    process.env.PINTEREST_SANDBOX_MANUAL_CONNECT === 'true'
+  );
+}
+
 function pinterestApiBaseUrl(): string {
   return pinterestUseSandbox()
     ? 'https://api-sandbox.pinterest.com/v5'
@@ -77,6 +84,100 @@ export class PinterestProvider
     return `${process.env.FRONTEND_URL}/integrations/social/pinterest`;
   }
 
+  private oauthTokenBody(params: Record<string, string>) {
+    return new URLSearchParams({
+      ...params,
+      client_id: process.env.PINTEREST_CLIENT_ID || '',
+      client_secret: process.env.PINTEREST_CLIENT_SECRET || '',
+    });
+  }
+
+  private async exchangeAuthorizationCode(code: string) {
+    const exchange = async (apiBase: string) => {
+      const tokenResponse = await fetch(`${apiBase}/oauth/token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: this.oauthBasicAuth(),
+        },
+        body: this.oauthTokenBody({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: this.oauthRedirectUri(),
+        }),
+      });
+
+      const tokenBody = await tokenResponse.json();
+      return { tokenResponse, tokenBody, apiBase };
+    };
+
+    const primary = await exchange(pinterestApiBaseUrl());
+
+    if (
+      pinterestUseSandbox() &&
+      (!primary.tokenResponse.ok || !primary.tokenBody.access_token)
+    ) {
+      console.warn(
+        '[pinterest] Sandbox token exchange failed, retrying production oauth/token endpoint'
+      );
+      return exchange('https://api.pinterest.com/v5');
+    }
+
+    return primary;
+  }
+
+  private async accountFromToken(accessToken: string) {
+    const accountResponse = await fetch(`${pinterestApiBaseUrl()}/user_account`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    const accountBody = await accountResponse.json();
+
+    if (!accountResponse.ok || !accountBody?.username) {
+      throw new NotEnoughScopes(
+        accountBody?.message || 'Pinterest authentication failed'
+      );
+    }
+
+    return accountBody;
+  }
+
+  async customFields() {
+    if (!pinterestSandboxManualConnect()) {
+      return undefined;
+    }
+
+    return [
+      {
+        key: 'accessToken',
+        label: 'Pinterest Sandbox access token',
+        validation: `/^.{20,}$/`,
+        type: 'password' as const,
+      },
+    ];
+  }
+
+  private async authenticateManualSandboxToken(code: string) {
+    const body = JSON.parse(Buffer.from(code, 'base64').toString());
+    const accessToken = body.accessToken as string;
+
+    const { id, profile_image, username } =
+      await this.accountFromToken(accessToken);
+
+    return {
+      id: id,
+      name: username,
+      accessToken,
+      refreshToken: accessToken,
+      expiresIn: dayjs().add(30, 'day').unix() - dayjs().unix(),
+      picture: profile_image || '',
+      username,
+    };
+  }
+
   private oauthBasicAuth() {
     return `Basic ${Buffer.from(
       `${process.env.PINTEREST_CLIENT_ID}:${process.env.PINTEREST_CLIENT_SECRET}`
@@ -118,7 +219,7 @@ export class PinterestProvider
           'Content-Type': 'application/x-www-form-urlencoded',
           Authorization: this.oauthBasicAuth(),
         },
-        body: new URLSearchParams({
+        body: this.oauthTokenBody({
           grant_type: 'refresh_token',
           refresh_token: refreshToken,
           scope: this.scopes.join(','),
@@ -167,25 +268,25 @@ export class PinterestProvider
     codeVerifier: string;
     refresh: string;
   }) {
-    const tokenResponse = await fetch(`${pinterestApiBaseUrl()}/oauth/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: this.oauthBasicAuth(),
-      },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code: params.code,
-        redirect_uri: this.oauthRedirectUri(),
-      }),
-    });
+    if (pinterestSandboxManualConnect()) {
+      try {
+        const body = JSON.parse(Buffer.from(params.code, 'base64').toString());
+        if (body.accessToken) {
+          return this.authenticateManualSandboxToken(params.code);
+        }
+      } catch {
+        // Fall through to OAuth when code is not a manual token payload.
+      }
+    }
 
-    const tokenBody = await tokenResponse.json();
+    const { tokenResponse, tokenBody } = await this.exchangeAuthorizationCode(
+      params.code
+    );
 
     if (!tokenResponse.ok || !tokenBody.access_token) {
       console.error(
         '[pinterest] OAuth token exchange failed:',
-        tokenBody?.message || tokenBody?.code || tokenResponse.status,
+        JSON.stringify(tokenBody),
         pinterestUseSandbox() ? '(sandbox)' : '(production)'
       );
       throw new NotEnoughScopes(
@@ -197,14 +298,8 @@ export class PinterestProvider
 
     this.assertScopes(scope);
 
-    const { id, profile_image, username } = await (
-      await fetch(`${pinterestApiBaseUrl()}/user_account`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${access_token}`,
-        },
-      })
-    ).json();
+    const { id, profile_image, username } =
+      await this.accountFromToken(access_token);
 
     return {
       id: id,
