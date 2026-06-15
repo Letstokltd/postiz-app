@@ -59,7 +59,12 @@ export class NoAuthIntegrationsController {
     const integrationProvider =
       this._integrationManager.getSocialIntegration(integration);
 
-    const getCodeVerifier = integrationProvider.customFields
+    const customFields = integrationProvider.customFields
+      ? await integrationProvider.customFields()
+      : undefined;
+    const usesCustomFields = !!customFields?.length;
+
+    const getCodeVerifier = usesCustomFields
       ? 'none'
       : await ioRedis.get(`login:${body.state}`);
     if (!getCodeVerifier) {
@@ -79,7 +84,7 @@ export class NoAuthIntegrationsController {
 
     const org = await this._organizationService.getOrgById(organization);
 
-    if (!integrationProvider.customFields) {
+    if (!usesCustomFields) {
       await ioRedis.del(`login:${body.state}`);
     }
 
@@ -248,7 +253,7 @@ export class NoAuthIntegrationsController {
         +body.timezone,
         details
           ? AuthService.fixedEncryption(details)
-          : integrationProvider.customFields
+          : usesCustomFields
           ? AuthService.fixedEncryption(
               Buffer.from(body.code, 'base64').toString()
             )

@@ -99,9 +99,14 @@ export class IntegrationsController {
             identifier: p.providerIdentifier,
             inBetweenSteps: p.inBetweenSteps,
             refreshNeeded: p.refreshNeeded,
-            isCustomFields: !!findIntegration.customFields,
+            isCustomFields: !!(
+              findIntegration.customFields &&
+              (await findIntegration.customFields())?.length
+            ),
             ...(findIntegration.customFields
-              ? { customFields: await findIntegration.customFields() }
+              ? await findIntegration.customFields().then((fields) =>
+                  fields?.length ? { customFields: fields } : {}
+                )
               : {}),
             display: p.profile,
             type: p.type,

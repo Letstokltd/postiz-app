@@ -74,6 +74,8 @@ services:
       PINTEREST_CLIENT_SECRET: ''
       # Set to true for Pinterest Standard upgrade demo (uses api-sandbox.pinterest.com)
       PINTEREST_USE_SANDBOX: ${PINTEREST_USE_SANDBOX:-false}
+      # Paste-token fallback when sandbox OAuth exchange fails
+      PINTEREST_SANDBOX_MANUAL_CONNECT: ${PINTEREST_SANDBOX_MANUAL_CONNECT:-false}
       DRIBBBLE_CLIENT_ID: ''
       DRIBBBLE_CLIENT_SECRET: ''
       DISCORD_CLIENT_ID: ''
