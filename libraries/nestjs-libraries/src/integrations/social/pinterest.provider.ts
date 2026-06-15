@@ -29,6 +29,15 @@ function pinterestSandboxManualConnect(): boolean {
   );
 }
 
+function pinterestSandboxFixedToken(): string | undefined {
+  if (!pinterestUseSandbox()) {
+    return undefined;
+  }
+
+  const token = process.env.PINTEREST_SANDBOX_TOKEN?.trim();
+  return token ? token : undefined;
+}
+
 function pinterestApiBaseUrl(): string {
   return pinterestUseSandbox()
     ? 'https://api-sandbox.pinterest.com/v5'
@@ -139,6 +148,11 @@ export class PinterestProvider
   }
 
   async customFields() {
+    // Fixed-token mode connects automatically; never prompt for a token.
+    if (pinterestSandboxFixedToken()) {
+      return undefined;
+    }
+
     if (!pinterestSandboxManualConnect()) {
       return undefined;
     }
@@ -244,6 +258,18 @@ export class PinterestProvider
   async generateAuthUrl() {
     const state = makeId(6);
 
+    // Fixed-token mode: skip Pinterest's OAuth screen and route straight back
+    // to our callback so the connect completes with the configured token.
+    if (pinterestSandboxFixedToken()) {
+      return {
+        url: `${
+          process.env.FRONTEND_URL
+        }/integrations/social/pinterest?state=${state}&code=${makeId(10)}`,
+        codeVerifier: makeId(10),
+        state,
+      };
+    }
+
     if (pinterestSandboxManualConnect()) {
       return {
         url: state,
@@ -270,6 +296,23 @@ export class PinterestProvider
     codeVerifier: string;
     refresh: string;
   }) {
+    const fixedToken = pinterestSandboxFixedToken();
+    if (fixedToken) {
+      const { id, profile_image, username } = await this.accountFromToken(
+        fixedToken
+      );
+
+      return {
+        id,
+        name: username,
+        accessToken: fixedToken,
+        refreshToken: fixedToken,
+        expiresIn: dayjs().add(30, 'day').unix() - dayjs().unix(),
+        picture: profile_image || '',
+        username,
+      };
+    }
+
     if (pinterestSandboxManualConnect()) {
       try {
         const body = JSON.parse(Buffer.from(params.code, 'base64').toString());
