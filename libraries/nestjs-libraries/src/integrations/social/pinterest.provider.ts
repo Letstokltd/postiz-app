@@ -85,45 +85,38 @@ export class PinterestProvider
   }
 
   private oauthTokenBody(params: Record<string, string>) {
-    return new URLSearchParams({
-      ...params,
-      client_id: process.env.PINTEREST_CLIENT_ID || '',
-      client_secret: process.env.PINTEREST_CLIENT_SECRET || '',
-    });
+    return new URLSearchParams(params);
   }
 
   private async exchangeAuthorizationCode(code: string) {
-    const exchange = async (apiBase: string) => {
-      const tokenResponse = await fetch(`${apiBase}/oauth/token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Authorization: this.oauthBasicAuth(),
-        },
-        body: this.oauthTokenBody({
-          grant_type: 'authorization_code',
-          code,
-          redirect_uri: this.oauthRedirectUri(),
-        }),
-      });
+    const apiBase = pinterestApiBaseUrl();
+    const redirectUri = this.oauthRedirectUri();
+    const tokenResponse = await fetch(`${apiBase}/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: this.oauthBasicAuth(),
+      },
+      body: this.oauthTokenBody({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+      }),
+    });
 
-      const tokenBody = await tokenResponse.json();
-      return { tokenResponse, tokenBody, apiBase };
-    };
+    const tokenBody = await tokenResponse.json();
 
-    const primary = await exchange(pinterestApiBaseUrl());
-
-    if (
-      pinterestUseSandbox() &&
-      (!primary.tokenResponse.ok || !primary.tokenBody.access_token)
-    ) {
-      console.warn(
-        '[pinterest] Sandbox token exchange failed, retrying production oauth/token endpoint'
+    if (!tokenResponse.ok || !tokenBody.access_token) {
+      console.error(
+        '[pinterest] OAuth token exchange failed:',
+        JSON.stringify(tokenBody),
+        `endpoint=${apiBase}/oauth/token`,
+        `redirect_uri=${redirectUri}`,
+        pinterestUseSandbox() ? '(sandbox)' : '(production)'
       );
-      return exchange('https://api.pinterest.com/v5');
     }
 
-    return primary;
+    return { tokenResponse, tokenBody };
   }
 
   private async accountFromToken(accessToken: string) {
@@ -284,11 +277,6 @@ export class PinterestProvider
     );
 
     if (!tokenResponse.ok || !tokenBody.access_token) {
-      console.error(
-        '[pinterest] OAuth token exchange failed:',
-        JSON.stringify(tokenBody),
-        pinterestUseSandbox() ? '(sandbox)' : '(production)'
-      );
       throw new NotEnoughScopes(
         tokenBody?.message || 'Pinterest authentication failed'
       );
