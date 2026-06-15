@@ -295,7 +295,7 @@ export const MenuComponent: FC<
         <ImageWithFallback
           fallbackSrc={'/no-picture.jpg'}
           src={integration.picture || '/no-picture.jpg'}
-          className="rounded-[8px] min-w-[36px] min-h-[36px]"
+          className="rounded-[8px] w-[36px] h-[36px] min-w-[36px] min-h-[36px] object-cover"
           alt={integration.identifier}
           width={36}
           height={36}
