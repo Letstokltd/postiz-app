@@ -44,7 +44,7 @@ export class PinterestProvider
 {
   identifier = 'pinterest';
   get name() {
-    return pinterestUseSandbox() ? 'Pinterest (Sandbox)' : 'Pinterest';
+    return 'Pinterest';
   }
   isBetweenSteps = false;
   scopes = [
