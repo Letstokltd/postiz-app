@@ -243,6 +243,15 @@ export class PinterestProvider
 
   async generateAuthUrl() {
     const state = makeId(6);
+
+    if (pinterestSandboxManualConnect()) {
+      return {
+        url: state,
+        codeVerifier: makeId(10),
+        state,
+      };
+    }
+
     return {
       url: `https://www.pinterest.com/oauth/?client_id=${
         process.env.PINTEREST_CLIENT_ID
