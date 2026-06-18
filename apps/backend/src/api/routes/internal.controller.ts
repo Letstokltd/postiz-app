@@ -445,6 +445,34 @@ export class InternalController {
   }
 
   /**
+   * Per-post platform insights — labeled metric series (views/impressions/
+   * engagement) for a single published post, pulled from the network's analytics.
+   * Same data the dashboard's /analytics/post/:id endpoint returns.
+   */
+  @Post('/posts/insights')
+  async postsInsights(
+    @Headers('x-internal-api-key') apiKey: string,
+    @Body() body: { firebaseUid: string; id: string; date?: string | number },
+  ) {
+    this.assertInternalKey(apiKey);
+    if (!body.firebaseUid || !body.id) {
+      return { success: false, message: 'firebaseUid and id are required' };
+    }
+    const orgId = await this._planSyncService.getOrgIdByFirebaseUid(body.firebaseUid);
+    if (!orgId) return { success: false, message: 'No organization found' };
+    try {
+      const insights = await this._postsService.checkPostAnalytics(
+        orgId,
+        body.id,
+        Number(body.date ?? 30),
+      );
+      return { success: true, insights };
+    } catch (err: any) {
+      return { success: false, message: err?.message ?? 'Failed to get post insights' };
+    }
+  }
+
+  /**
    * Platform analytics for ONE connected channel (followers, impressions,
    * engagement, etc.) over the last `date` days. checkAnalytics only uses
    * org.id, so the resolved orgId is enough.
