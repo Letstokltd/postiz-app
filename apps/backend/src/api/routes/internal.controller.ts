@@ -49,7 +49,10 @@ interface InternalPublishChannel {
 
 interface InternalPublishBody {
   firebaseUid: string;
-  mediaUrl: string;
+  /** Public URL to import into the media library (mutually optional with mediaId). */
+  mediaUrl?: string;
+  /** Existing media id in the org's library (e.g. from /upload-from-url). */
+  mediaId?: string;
   caption?: string;
   contentHtml?: string;
   type?: 'now' | 'schedule' | 'draft';
@@ -239,8 +242,8 @@ export class InternalController {
     if (!body.firebaseUid) {
       return { success: false, message: 'firebaseUid is required' };
     }
-    if (!body.mediaUrl) {
-      return { success: false, message: 'mediaUrl is required' };
+    if (!body.mediaUrl && !body.mediaId) {
+      return { success: false, message: 'mediaUrl or mediaId is required' };
     }
     if (!body.channels?.length) {
       return { success: false, message: 'At least one channel is required' };
@@ -271,21 +274,32 @@ export class InternalController {
       };
     }
 
-    // Import the media into the org's library.
+    // Resolve the media: an existing library id, or import from URL.
     let media: { id: string; path: string };
-    try {
-      media = (await this._mediaService.importFromUrl(
-        orgId,
-        body.mediaUrl
-      )) as { id: string; path: string };
-    } catch (err: any) {
-      this.logger.error(
-        `Internal publish media import failed for ${body.firebaseUid}: ${err?.message}`
-      );
-      return {
-        success: false,
-        message: `Media import failed: ${err?.message ?? 'unknown error'}`,
-      };
+    if (body.mediaId) {
+      const existing = await this._mediaService.getMediaById(body.mediaId);
+      if (!existing || existing.organizationId !== orgId || existing.deletedAt) {
+        return {
+          success: false,
+          message: `Media ${body.mediaId} not found in this account's library`,
+        };
+      }
+      media = { id: existing.id, path: existing.path };
+    } else {
+      try {
+        media = (await this._mediaService.importFromUrl(
+          orgId,
+          body.mediaUrl
+        )) as { id: string; path: string };
+      } catch (err: any) {
+        this.logger.error(
+          `Internal publish media import failed for ${body.firebaseUid}: ${err?.message}`
+        );
+        return {
+          success: false,
+          message: `Media import failed: ${err?.message ?? 'unknown error'}`,
+        };
+      }
     }
 
     const type = body.type ?? 'now';
