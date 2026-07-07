@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
-import { Provider } from '@prisma/client';
+import { Provider, Role } from '@prisma/client';
 import { PrismaService } from '@gitroom/nestjs-libraries/database/prisma/prisma.service';
 
 const CACHE_KEY_PREFIX = 'studio-tools-plan:';
@@ -107,11 +107,118 @@ export class PlanSyncService {
       include: {
         organizations: {
           where: { disabled: false },
-          select: { organizationId: true },
-          take: 1,
+          select: { organizationId: true, role: true, createdAt: true },
         },
       },
     });
-    return user?.organizations?.[0]?.organizationId ?? null;
+    if (!user?.organizations?.length) return null;
+
+    // Prefer the user's OWN org (SUPERADMIN = org creator) over orgs they were
+    // added to as a delegated manager (role ADMIN). Without this, a manager's
+    // firebaseUid could resolve to a client's org and cross-post content.
+    const rank = (r: Role) =>
+      r === Role.SUPERADMIN ? 0 : r === Role.ADMIN ? 1 : 2;
+    const sorted = [...user.organizations].sort(
+      (a, b) =>
+        rank(a.role) - rank(b.role) ||
+        a.createdAt.getTime() - b.createdAt.getTime()
+    );
+    return sorted[0].organizationId;
+  }
+
+  // ------------------------------------------------------------------
+  // Delegated access ("Marketing Manager") — org membership sync.
+  // Called by LetsTok Studio (server-v1) via /api/internal/delegations/*.
+  // ------------------------------------------------------------------
+
+  /**
+   * Add the manager's Postiz user to the client's org as ADMIN so they can
+   * manage channels and post from the Postiz UI (and via the org switcher).
+   * Idempotent. Returns flags so the caller can log/retry.
+   */
+  async upsertDelegationMembership(
+    managerFirebaseUid: string,
+    clientFirebaseUid: string
+  ): Promise<{
+    success: boolean;
+    managerNotProvisioned?: boolean;
+    clientNotProvisioned?: boolean;
+    message?: string;
+  }> {
+    if (
+      !managerFirebaseUid ||
+      !clientFirebaseUid ||
+      managerFirebaseUid === clientFirebaseUid
+    ) {
+      return { success: false, message: 'Invalid uids' };
+    }
+
+    const manager = await this._prisma.user.findFirst({
+      where: { providerName: Provider.FIREBASE, providerId: managerFirebaseUid },
+    });
+    if (!manager) {
+      // The manager gets a Postiz user on their first visit to LetsTok Social
+      // (auth/firebase-sso). The caller retries the sync lazily on
+      // switch_account, so this heals itself once they open Social.
+      return {
+        success: false,
+        managerNotProvisioned: true,
+        message:
+          'Manager has no LetsTok Social user yet (they need to open Social once)',
+      };
+    }
+
+    const clientOrgId = await this.getOrgIdByFirebaseUid(clientFirebaseUid);
+    if (!clientOrgId) {
+      return {
+        success: false,
+        clientNotProvisioned: true,
+        message:
+          'Client has no LetsTok Social organization yet (they need to open Social once)',
+      };
+    }
+
+    await this._prisma.userOrganization.upsert({
+      where: {
+        userId_organizationId: {
+          userId: manager.id,
+          organizationId: clientOrgId,
+        },
+      },
+      update: { role: Role.ADMIN, disabled: false },
+      create: {
+        userId: manager.id,
+        organizationId: clientOrgId,
+        role: Role.ADMIN,
+        disabled: false,
+      },
+    });
+    return { success: true };
+  }
+
+  /** Remove the manager from the client's org (delegation revoked). */
+  async removeDelegationMembership(
+    managerFirebaseUid: string,
+    clientFirebaseUid: string
+  ): Promise<{ success: boolean; message?: string }> {
+    const manager = await this._prisma.user.findFirst({
+      where: { providerName: Provider.FIREBASE, providerId: managerFirebaseUid },
+    });
+    if (!manager) return { success: true, message: 'Manager not provisioned' };
+
+    const clientOrgId = await this.getOrgIdByFirebaseUid(clientFirebaseUid);
+    if (!clientOrgId) {
+      return { success: true, message: 'Client org not found' };
+    }
+
+    // Safety: never touch a SUPERADMIN membership (that would be the org owner).
+    await this._prisma.userOrganization.deleteMany({
+      where: {
+        userId: manager.id,
+        organizationId: clientOrgId,
+        role: { not: Role.SUPERADMIN },
+      },
+    });
+    return { success: true };
   }
 }

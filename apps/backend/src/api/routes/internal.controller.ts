@@ -82,6 +82,62 @@ export class InternalController {
     }
   }
 
+  /**
+   * Delegated access ("Marketing Manager", LetsTok Studio feature): add the
+   * manager's Postiz user to the client's org as ADMIN so they can manage
+   * channels and post from the Postiz UI. Idempotent.
+   */
+  @Post('/delegations/upsert')
+  async delegationUpsert(
+    @Headers('x-internal-api-key') apiKey: string,
+    @Body()
+    body: { managerFirebaseUid: string; clientFirebaseUid: string }
+  ) {
+    this.assertInternalKey(apiKey);
+    if (!body?.managerFirebaseUid || !body?.clientFirebaseUid) {
+      return {
+        success: false,
+        message: 'managerFirebaseUid and clientFirebaseUid are required',
+      };
+    }
+    const result = await this._planSyncService.upsertDelegationMembership(
+      body.managerFirebaseUid,
+      body.clientFirebaseUid
+    );
+    this.logger.log(
+      `Delegation upsert manager=${body.managerFirebaseUid} client=${body.clientFirebaseUid} → ${JSON.stringify(
+        result
+      )}`
+    );
+    return result;
+  }
+
+  /** Delegated access: remove the manager from the client's org (revoked). */
+  @Post('/delegations/remove')
+  async delegationRemove(
+    @Headers('x-internal-api-key') apiKey: string,
+    @Body()
+    body: { managerFirebaseUid: string; clientFirebaseUid: string }
+  ) {
+    this.assertInternalKey(apiKey);
+    if (!body?.managerFirebaseUid || !body?.clientFirebaseUid) {
+      return {
+        success: false,
+        message: 'managerFirebaseUid and clientFirebaseUid are required',
+      };
+    }
+    const result = await this._planSyncService.removeDelegationMembership(
+      body.managerFirebaseUid,
+      body.clientFirebaseUid
+    );
+    this.logger.log(
+      `Delegation remove manager=${body.managerFirebaseUid} client=${body.clientFirebaseUid} → ${JSON.stringify(
+        result
+      )}`
+    );
+    return result;
+  }
+
   @Post('/invalidate-plan-cache')
   async invalidatePlanCache(
     @Headers('x-internal-api-key') apiKey: string,
