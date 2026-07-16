@@ -535,6 +535,9 @@ export class IntegrationRepository {
       },
       data: {
         deletedAt: new Date(),
+        token: '',
+        refreshToken: null,
+        tokenExpiration: null,
       },
     });
   }

@@ -80,7 +80,85 @@ export default function PrivacyTermsPage() {
             <li>When we have your consent</li>
           </ul>
 
-          <h2 className="text-lg font-semibold mt-8 mb-3">5. Data Security</h2>
+          <h2 className="text-lg font-semibold mt-8 mb-3">
+            5. Google and YouTube API Services
+          </h2>
+          <p>
+            LetsPost uses YouTube API Services to let you connect your YouTube
+            channel, upload and schedule videos, and view analytics. By
+            connecting a YouTube channel and using these features, you also
+            agree to the{' '}
+            <a
+              href="https://www.youtube.com/t/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:font-bold text-[var(--new-table-text-focused)]"
+            >
+              YouTube Terms of Service
+            </a>{' '}
+            and acknowledge the{' '}
+            <a
+              href="https://policies.google.com/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:font-bold text-[var(--new-table-text-focused)]"
+            >
+              Google Privacy Policy
+            </a>
+            .
+          </p>
+          <p>
+            <strong>Data we access through Google and YouTube:</strong> When you
+            connect your account, we access and store your Google profile
+            information (name, email address and profile picture), your YouTube
+            channel information (channel name, channel ID, thumbnail and
+            subscriber count), and OAuth access and refresh tokens. With your
+            authorization, we also upload and schedule videos on your behalf and
+            read YouTube Analytics reports for your content.
+          </p>
+          <p>
+            <strong>How we use this data:</strong> We use Google and YouTube
+            user data solely to provide the social media scheduling, publishing
+            and analytics features of LetsPost that you request. We do not sell
+            Google user data, use it for advertising, or transfer it to third
+            parties except as needed to provide the service or to comply with
+            the law. Our use of information received from Google APIs adheres to
+            the{' '}
+            <a
+              href="https://developers.google.com/terms/api-services-user-data-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:font-bold text-[var(--new-table-text-focused)]"
+            >
+              Google API Services User Data Policy
+            </a>
+            , including the Limited Use requirements.
+          </p>
+          <p>
+            <strong>Revoking access and deleting data:</strong> You can
+            disconnect your YouTube channel at any time inside LetsPost, or
+            revoke LetsPost&apos;s access to your Google account via the{' '}
+            <a
+              href="https://security.google.com/settings/security/permissions"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:font-bold text-[var(--new-table-text-focused)]"
+            >
+              Google security settings page
+            </a>
+            . When you disconnect a channel or revoke access, we delete the
+            associated API data and stored tokens within 7 days. You may also
+            contact us at{' '}
+            <a
+              href="mailto:info@letstok.com"
+              className="underline hover:font-bold text-[var(--new-table-text-focused)]"
+            >
+              info@letstok.com
+            </a>{' '}
+            to request deletion of your data.
+          </p>
+
+          <h2 className="text-lg font-semibold mt-8 mb-3">6. Data Security</h2>
           <p>
             We implement a variety of security measures to maintain the safety
             of your personal data. However, no method of transmission over the
@@ -89,7 +167,7 @@ export default function PrivacyTermsPage() {
           </p>
 
           <h2 className="text-lg font-semibold mt-8 mb-3">
-            6. Your Data Protection Rights
+            7. Your Data Protection Rights
           </h2>
           <p>
             Depending on your location, you may have the following rights
@@ -114,7 +192,7 @@ export default function PrivacyTermsPage() {
             .
           </p>
 
-          <h2 className="text-lg font-semibold mt-8 mb-3">7. Third-Party Links</h2>
+          <h2 className="text-lg font-semibold mt-8 mb-3">8. Third-Party Links</h2>
           <p>
             Our website may contain links to third-party websites, including
             social media platforms that we integrate with. We are not
@@ -123,7 +201,7 @@ export default function PrivacyTermsPage() {
           </p>
 
           <h2 className="text-lg font-semibold mt-8 mb-3">
-            8. Changes to This Privacy Policy
+            9. Changes to This Privacy Policy
           </h2>
           <p>
             We may update our Privacy Policy from time to time. We will notify
@@ -131,7 +209,7 @@ export default function PrivacyTermsPage() {
             and updating the effective date.
           </p>
 
-          <h2 className="text-lg font-semibold mt-8 mb-3">9. Contact Us</h2>
+          <h2 className="text-lg font-semibold mt-8 mb-3">10. Contact Us</h2>
           <p>
             If you have any questions about this Privacy Policy or our data
             practices, please contact us at:
@@ -146,7 +224,7 @@ export default function PrivacyTermsPage() {
         <p className="mt-12 pt-8 border-t border-[var(--new-sep)] text-sm text-[var(--new-textItemBlur)]">
           Copyright © 2023, Letstok Technologies Ltd. All rights reserved.
           <br />
-          Last Updated: January 01, 2024
+          Last Updated: July 16, 2026
         </p>
 
         <div className="mt-8 flex gap-4">

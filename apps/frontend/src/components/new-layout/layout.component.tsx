@@ -368,6 +368,24 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                       </div>
                     </div>
                     <div className="flex flex-1 gap-[1px]">{children}</div>
+                    <div className="flex bg-newBgColorInner px-[20px] py-[10px] items-center justify-center gap-[16px] text-[12px] text-textItemBlur">
+                      <a
+                        href="/privacy-terms"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-newTextColor"
+                      >
+                        Privacy Policy
+                      </a>
+                      <a
+                        href="/terms-and-condition"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-newTextColor"
+                      >
+                        Terms of Service
+                      </a>
+                    </div>
                   </div>
                 </div>
               )}
