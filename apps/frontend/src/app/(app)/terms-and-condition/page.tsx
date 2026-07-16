@@ -202,7 +202,52 @@ export default function TermsAndConditionPage() {
           </p>
 
           <h2 className="text-lg font-semibold mt-8 mb-3">
-            10. Warranty and Disclaimer
+            10. YouTube API Services
+          </h2>
+          <p>
+            Certain features of the Website rely on YouTube API Services. By
+            using those features, you agree to be bound by the{' '}
+            <a
+              href="https://www.youtube.com/t/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:font-bold text-[var(--new-table-text-focused)]"
+            >
+              YouTube Terms of Service
+            </a>
+            . Your use of Google and YouTube data through the Website is also
+            subject to the{' '}
+            <a
+              href="https://policies.google.com/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:font-bold text-[var(--new-table-text-focused)]"
+            >
+              Google Privacy Policy
+            </a>
+            . You may revoke the Website&apos;s access to your Google account at
+            any time via the{' '}
+            <a
+              href="https://security.google.com/settings/security/permissions"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:font-bold text-[var(--new-table-text-focused)]"
+            >
+              Google security settings page
+            </a>
+            . We describe how we access, use, store and delete YouTube and
+            Google user data in our{' '}
+            <Link
+              href="/privacy-terms"
+              className="underline hover:font-bold text-[var(--new-table-text-focused)]"
+            >
+              Privacy Policy
+            </Link>
+            .
+          </p>
+
+          <h2 className="text-lg font-semibold mt-8 mb-3">
+            11. Warranty and Disclaimer
           </h2>
           <p>
             THE WEBSITE AND CONTENT ARE PROVIDED ON AN &quot;AS IS&quot; AND
@@ -214,7 +259,7 @@ export default function TermsAndConditionPage() {
           </p>
 
           <h2 className="text-lg font-semibold mt-8 mb-3">
-            11. Limitation of Liability
+            12. Limitation of Liability
           </h2>
           <p>
             IN NO EVENT SHALL THE COMPANY BE LIABLE FOR ANY INDIRECT, SPECIAL,
@@ -225,7 +270,7 @@ export default function TermsAndConditionPage() {
           </p>
 
           <h2 className="text-lg font-semibold mt-8 mb-3">
-            12. Indemnification
+            13. Indemnification
           </h2>
           <p>
             User shall indemnify, defend and hold harmless the Company, its
@@ -236,7 +281,7 @@ export default function TermsAndConditionPage() {
           </p>
 
           <h2 className="text-lg font-semibold mt-8 mb-3">
-            13. Modifications
+            14. Modifications
           </h2>
           <p>
             The Company reserves the right to change, modify, amend, suspend or
@@ -245,20 +290,20 @@ export default function TermsAndConditionPage() {
             using the Website.
           </p>
 
-          <h2 className="text-lg font-semibold mt-8 mb-3">14. Termination</h2>
+          <h2 className="text-lg font-semibold mt-8 mb-3">15. Termination</h2>
           <p>
             The Company may terminate your use of the Website at any time and
             without prior written notice if you have breached these Terms.
           </p>
 
-          <h2 className="text-lg font-semibold mt-8 mb-3">15. Severability</h2>
+          <h2 className="text-lg font-semibold mt-8 mb-3">16. Severability</h2>
           <p>
             If any provision of these Terms is held to be invalid or
             unenforceable, the remainder of these Terms shall continue in full
             force and effect.
           </p>
 
-          <h2 className="text-lg font-semibold mt-8 mb-3">16. Governing Law</h2>
+          <h2 className="text-lg font-semibold mt-8 mb-3">17. Governing Law</h2>
           <p>
             This Agreement shall be governed by and interpreted in accordance
             with the laws of the State of Israel. The exclusive jurisdiction
@@ -266,7 +311,7 @@ export default function TermsAndConditionPage() {
             Israel.
           </p>
 
-          <h2 className="text-lg font-semibold mt-8 mb-3">17. General</h2>
+          <h2 className="text-lg font-semibold mt-8 mb-3">18. General</h2>
           <p>
             These Terms and the Privacy Policy represent the complete agreement
             concerning the Website between you and the Company. The failure of
@@ -278,7 +323,7 @@ export default function TermsAndConditionPage() {
         <p className="mt-12 pt-8 border-t border-[var(--new-sep)] text-sm text-[var(--new-textItemBlur)]">
           Copyright © 2023, Letstok Technologies Ltd. All rights reserved.
           <br />
-          Last Updated: January 2024
+          Last Updated: July 16, 2026
         </p>
 
         <Link
