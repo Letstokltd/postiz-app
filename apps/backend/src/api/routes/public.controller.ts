@@ -151,6 +151,57 @@ export class PublicController {
     return this._nowpayments.processPayment(path, body);
   }
 
+  @Get('gcs-proxy/:path(*)')
+  async gcsProxy(@Param('path') pathParam: string, @Res() res: Response) {
+    const bucketName = process.env.GCS_BUCKET_NAME;
+    const credentialsJson =
+      process.env.GCS_CREDENTIALS_JSON ||
+      process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+    if (!bucketName || !credentialsJson) {
+      return res.status(503).send('GCS proxy not configured');
+    }
+
+    const objectPath = decodeURIComponent(pathParam.replace(/^\/+/, ''));
+
+    if (!objectPath) {
+      return res.status(400).send('Missing object path');
+    }
+
+    try {
+      const credentials = JSON.parse(credentialsJson);
+      const { Storage } = await import('@google-cloud/storage');
+      const storage = new Storage({
+        credentials: {
+          client_email: credentials.client_email,
+          private_key: credentials.private_key,
+        },
+      });
+      const file = storage.bucket(bucketName).file(objectPath);
+      const [exists] = await file.exists();
+      if (!exists) {
+        return res.status(404).send('Not found');
+      }
+
+      const [metadata] = await file.getMetadata();
+      const contentType =
+        metadata.contentType ||
+        (objectPath.endsWith('.mp4') ? 'video/mp4' : 'application/octet-stream');
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      if (metadata.size) {
+        res.setHeader('Content-Length', String(metadata.size));
+      }
+
+      file.createReadStream().on('error', () => res.end()).pipe(res);
+    } catch {
+      if (!res.headersSent) {
+        res.status(500).send('Failed to stream object');
+      }
+    }
+  }
+
   @Get('/stream')
   async streamFile(
     @Query('url') url: string,

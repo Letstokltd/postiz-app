@@ -7,6 +7,7 @@ export class TikTokDto {
   @MaxLength(90)
   title: string;
 
+  @IsOptional()
   @IsIn([
     'PUBLIC_TO_EVERYONE',
     'MUTUAL_FOLLOW_FRIENDS',
@@ -14,7 +15,7 @@ export class TikTokDto {
     'SELF_ONLY',
   ])
   @IsString()
-  privacy_level:
+  privacy_level?:
     | 'PUBLIC_TO_EVERYONE'
     | 'MUTUAL_FOLLOW_FRIENDS'
     | 'FOLLOWER_OF_CREATOR'

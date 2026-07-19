@@ -9,6 +9,7 @@ import { makeId } from '@gitroom/nestjs-libraries/services/make.is';
 import { timer } from '@gitroom/helpers/utils/timer';
 import dayjs from 'dayjs';
 import { SocialAbstract } from '@gitroom/nestjs-libraries/integrations/social.abstract';
+import { rewriteExternalMediaUrl } from '@gitroom/nestjs-libraries/integrations/social/rewrite-external-media-url';
 import { InstagramDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/instagram.dto';
 import { Integration } from '@prisma/client';
 import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
@@ -466,6 +467,7 @@ export class InstagramProvider
     const isTrialReel = !!firstPost.settings.is_trial_reel;
     const medias = await Promise.all(
       firstPost?.media?.map(async (m) => {
+        const mediaPath = rewriteExternalMediaUrl(m.path);
         const caption =
           firstPost.media?.length === 1
             ? `&caption=${encodeURIComponent(firstPost.message)}`
@@ -473,21 +475,21 @@ export class InstagramProvider
         const isCarousel =
           (firstPost?.media?.length || 0) > 1 ? `&is_carousel_item=true` : ``;
         const mediaType =
-          m.path.indexOf('.mp4') > -1
+          mediaPath.indexOf('.mp4') > -1
             ? firstPost?.media?.length === 1
               ? isStory
-                ? `video_url=${m.path}&media_type=STORIES`
-                : `video_url=${m.path}&media_type=REELS&thumb_offset=${
+                ? `video_url=${encodeURIComponent(mediaPath)}&media_type=STORIES`
+                : `video_url=${encodeURIComponent(mediaPath)}&media_type=REELS&thumb_offset=${
                     m?.thumbnailTimestamp || 0
                   }`
               : isStory
-              ? `video_url=${m.path}&media_type=STORIES`
-              : `video_url=${m.path}&media_type=VIDEO&thumb_offset=${
+              ? `video_url=${encodeURIComponent(mediaPath)}&media_type=STORIES`
+              : `video_url=${encodeURIComponent(mediaPath)}&media_type=VIDEO&thumb_offset=${
                   m?.thumbnailTimestamp || 0
                 }`
             : isStory
-            ? `image_url=${m.path}&media_type=STORIES`
-            : `image_url=${m.path}`;
+            ? `image_url=${encodeURIComponent(mediaPath)}&media_type=STORIES`
+            : `image_url=${encodeURIComponent(mediaPath)}`;
 
         const trialParams = isTrialReel
           ? `&trial_params=${encodeURIComponent(

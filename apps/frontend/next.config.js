@@ -54,6 +54,9 @@ const nextConfig = {
     ];
   },
   async rewrites() {
+    const backend =
+      process.env.BACKEND_INTERNAL_URL?.replace(/\/$/, '') ||
+      'http://localhost:3000';
     return [
       {
         source: '/uploads/:path*',
@@ -61,6 +64,10 @@ const nextConfig = {
           process.env.STORAGE_PROVIDER === 'local'
             ? '/api/uploads/:path*'
             : '/404',
+      },
+      {
+        source: '/gcs-proxy/:path*',
+        destination: `${backend}/public/gcs-proxy/:path*`,
       },
     ];
   },
