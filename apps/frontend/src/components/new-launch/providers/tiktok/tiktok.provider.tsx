@@ -19,6 +19,14 @@ import { useIntegration } from '@gitroom/frontend/components/launches/helpers/us
 import { Input } from '@gitroom/react/form/input';
 import { TiktokPreview } from '@gitroom/frontend/components/new-launch/providers/tiktok/tiktok.preview';
 
+const TIKTOK_DEFAULTS = {
+  content_posting_method: 'UPLOAD',
+  autoAddMusic: 'no',
+  duet: false,
+  stitch: false,
+  comment: false,
+} as const;
+
 const TikTokSettings: FC<{
   values?: any;
 }> = (props) => {
@@ -35,13 +43,26 @@ const TikTokSettings: FC<{
   const brand_content_toggle = watch('brand_content_toggle');
   const content_posting_method = watch('content_posting_method');
   const privacy_level = watch('privacy_level');
-  const isUploadMode = content_posting_method === 'UPLOAD';
+  const isUploadMode =
+    !content_posting_method || content_posting_method === 'UPLOAD';
+
+  useEffect(() => {
+    setValue('content_posting_method', TIKTOK_DEFAULTS.content_posting_method, {
+      shouldValidate: true,
+    });
+    setValue('autoAddMusic', TIKTOK_DEFAULTS.autoAddMusic, {
+      shouldValidate: true,
+    });
+    setValue('duet', TIKTOK_DEFAULTS.duet, { shouldValidate: true });
+    setValue('stitch', TIKTOK_DEFAULTS.stitch, { shouldValidate: true });
+    setValue('comment', TIKTOK_DEFAULTS.comment, { shouldValidate: true });
+  }, [setValue]);
 
   useEffect(() => {
     if (brand_content_toggle && privacy_level === 'SELF_ONLY') {
       setValue('privacy_level', '');
     }
-  }, [brand_content_toggle]);
+  }, [brand_content_toggle, privacy_level, setValue]);
 
   const privacyLevel = [
     {
@@ -69,13 +90,6 @@ const TikTokSettings: FC<{
         'Self upload — review & publish in the TikTok app (recommended)'
       ),
     },
-    {
-      value: 'DIRECT_POST',
-      label: t(
-        'post_content_directly_to_tiktok',
-        'Direct post to TikTok (coming soon)'
-      ),
-    },
   ];
   const yesNo = [
     {
@@ -92,25 +106,33 @@ const TikTokSettings: FC<{
     <div className="flex flex-col">
       {/*<CheckTikTokValidity picture={props?.values?.[0]?.image?.[0]?.path} />*/}
       <Input label="Title" {...register('title')} maxLength={90} />
-      <Select
-        label={t('label_who_can_see_this_video', 'Who can see this video?')}
-        disabled={isUploadMode}
-        {...register('privacy_level')}
-      >
-        <option value="">{t('select', 'Select')}</option>
-        {privacyLevel.map((item) => (
-          <option
-            key={item.value}
-            value={item.value}
-            disabled={brand_content_toggle && item.value === 'SELF_ONLY'}
-          >
-            {item.label}
-            {brand_content_toggle && item.value === 'SELF_ONLY'
-              ? ` (${t('branded_content_not_private', 'not available for branded content')})`
-              : ''}
-          </option>
-        ))}
-      </Select>
+      {isUploadMode ? (
+        <div className="text-[14px] mb-[12px] text-balance">
+          {t(
+            'tiktok_upload_mode_privacy_help',
+            'Privacy is chosen in the TikTok app when you publish from your draft inbox. Self upload is required until TikTok approves direct posting for our app.'
+          )}
+        </div>
+      ) : (
+        <Select
+          label={t('label_who_can_see_this_video', 'Who can see this video?')}
+          {...register('privacy_level')}
+        >
+          <option value="">{t('select', 'Select')}</option>
+          {privacyLevel.map((item) => (
+            <option
+              key={item.value}
+              value={item.value}
+              disabled={brand_content_toggle && item.value === 'SELF_ONLY'}
+            >
+              {item.label}
+              {brand_content_toggle && item.value === 'SELF_ONLY'
+                ? ` (${t('branded_content_not_private', 'not available for branded content')})`
+                : ''}
+            </option>
+          ))}
+        </Select>
+      )}
       <div className="text-[14px] mt-[10px] mb-[18px] text-balance">
         {t(
           'choose_upload_without_posting_description',
@@ -120,39 +142,24 @@ const TikTokSettings: FC<{
       </div>
       <Select
         label={t('label_content_posting_method', 'Content posting method')}
-        {...register('content_posting_method', {
-          value: 'UPLOAD',
-        })}
+        {...register('content_posting_method')}
       >
-        <option value="">{t('select', 'Select')}</option>
         {contentPostingMethod.map((item) => (
           <option key={item.value} value={item.value}>
             {item.label}
           </option>
         ))}
       </Select>
-      {content_posting_method === 'DIRECT_POST' ? (
-        <div className="text-[14px] mt-[8px] mb-[12px] text-balance text-[#f59e0b]">
-          {t(
-            'tiktok_direct_post_unavailable',
-            "Direct posting to TikTok isn't available yet — we're awaiting TikTok's approval. Please use “Self upload” for now; we'll enable direct posting as soon as it's approved."
-          )}
-        </div>
-      ) : (
-        <div className="text-[14px] mt-[8px] mb-[12px] text-balance">
-          {t(
-            'tiktok_self_upload_help',
-            'Your video will be uploaded as a draft to your TikTok account. Open the TikTok app on your phone, find the draft from LetsPost, and publish it from there.'
-          )}
-        </div>
-      )}
+      <div className="text-[14px] mt-[8px] mb-[12px] text-balance">
+        {t(
+          'tiktok_self_upload_help',
+          'Your video will be uploaded as a draft to your TikTok account. Open the TikTok app on your phone, find the draft from LetsPost, and publish it from there.'
+        )}
+      </div>
       <Select
         label={t('label_auto_add_music', 'Auto add music')}
-        {...register('autoAddMusic', {
-          value: 'no',
-        })}
+        {...register('autoAddMusic')}
       >
-        <option value="">{t('select', 'Select')}</option>
         {yesNo.map((item) => (
           <option key={item.value} value={item.value}>
             {item.label}

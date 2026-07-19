@@ -22,6 +22,7 @@ import { CreateTagDto } from '@gitroom/nestjs-libraries/dtos/posts/create.tag.dt
 import axios from 'axios';
 import sharp from 'sharp';
 import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
+import { normalizeTikTokSettings } from '@gitroom/nestjs-libraries/integrations/social/tiktok-defaults';
 import { Readable } from 'stream';
 import { OpenaiService } from '@gitroom/nestjs-libraries/openai/openai.service';
 dayjs.extend(utc);
@@ -182,13 +183,18 @@ export class PostsService {
             );
           }
 
+          const rawSettings = {
+            ...(post.settings || ({} as any)),
+            __type: integration.providerIdentifier,
+          };
+
           return {
             type: replaceDraft ? 'schedule' : body.type,
             ...post,
-            settings: {
-              ...(post.settings || ({} as any)),
-              __type: integration.providerIdentifier,
-            },
+            settings:
+              integration.providerIdentifier === 'tiktok'
+                ? normalizeTikTokSettings(rawSettings)
+                : rawSettings,
           };
         })
       ),

@@ -11,6 +11,10 @@ import {
   SocialAbstract,
 } from '@gitroom/nestjs-libraries/integrations/social.abstract';
 import { TikTokDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settings/tiktok.dto';
+import { rewriteExternalMediaUrl } from '@gitroom/nestjs-libraries/integrations/social/rewrite-external-media-url';
+import {
+  normalizeTikTokSettings,
+} from '@gitroom/nestjs-libraries/integrations/social/tiktok-defaults';
 import { timer } from '@gitroom/helpers/utils/timer';
 import { Integration } from '@prisma/client';
 import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
@@ -427,14 +431,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
   }
 
   private rewriteMediaUrl(url: string): string {
-    const gcsBucketName = process.env.GCS_BUCKET_NAME;
-    const frontendUrl = process.env.FRONTEND_URL;
-    if (!url || !gcsBucketName || !frontendUrl) return url;
-    const gcsPrefix = `https://storage.googleapis.com/${gcsBucketName}/`;
-    if (url.startsWith(gcsPrefix)) {
-      return url.replace(gcsPrefix, `${frontendUrl}/gcs-proxy/`);
-    }
-    return url;
+    return rewriteExternalMediaUrl(url);
   }
 
   private postingMethod(
@@ -459,13 +456,16 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     integration: Integration
   ): Promise<PostResponse[]> {
     const [firstPost] = postDetails;
+    const settings = normalizeTikTokSettings(
+      (firstPost.settings || {}) as Partial<TikTokDto> & Record<string, unknown>
+    );
     const isPhoto = (firstPost?.media?.[0]?.path?.indexOf('mp4') || -1) === -1;
     const {
       data: { publish_id },
     } = await (
       await this.fetch(
         `https://open.tiktokapis.com/v2/post/publish${this.postingMethod(
-          firstPost.settings.content_posting_method,
+          settings.content_posting_method,
           (firstPost?.media?.[0]?.path?.indexOf('mp4') || -1) === -1
         )}`,
         {
@@ -475,33 +475,33 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
-            ...(firstPost?.settings?.content_posting_method === 'DIRECT_POST'
+            ...(settings.content_posting_method === 'DIRECT_POST'
               ? {
                   post_info: {
-                    ...((firstPost?.settings?.title ||
+                    ...((settings.title ||
                     (firstPost.message && !isPhoto))
                       ? {
                           title:
-                            firstPost.settings.title ||
+                            settings.title ||
                             (isPhoto ? '' : firstPost.message),
                         }
                       : {}),
                     ...(isPhoto ? { description: firstPost.message } : {}),
                     privacy_level:
-                      firstPost.settings.privacy_level || 'PUBLIC_TO_EVERYONE',
-                    disable_duet: !firstPost.settings.duet || false,
-                    disable_comment: !firstPost.settings.comment || false,
-                    disable_stitch: !firstPost.settings.stitch || false,
-                    is_aigc: firstPost.settings.video_made_with_ai || false,
+                      settings.privacy_level || 'SELF_ONLY',
+                    disable_duet: !settings.duet || false,
+                    disable_comment: !settings.comment || false,
+                    disable_stitch: !settings.stitch || false,
+                    is_aigc: settings.video_made_with_ai || false,
                     brand_content_toggle:
-                      firstPost.settings.brand_content_toggle || false,
+                      settings.brand_content_toggle || false,
                     brand_organic_toggle:
-                      firstPost.settings.brand_organic_toggle || false,
+                      settings.brand_organic_toggle || false,
                     ...((firstPost?.media?.[0]?.path?.indexOf('mp4') || -1) ===
                     -1
                       ? {
                           auto_add_music:
-                            firstPost.settings.autoAddMusic === 'yes',
+                            settings.autoAddMusic === 'yes',
                         }
                       : {}),
                   },
@@ -527,8 +527,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
                     photo_images: firstPost.media?.map((p) => this.rewriteMediaUrl(p.path)),
                   },
                   post_mode:
-                    firstPost?.settings?.content_posting_method ===
-                    'DIRECT_POST'
+                    settings.content_posting_method === 'DIRECT_POST'
                       ? 'DIRECT_POST'
                       : 'MEDIA_UPLOAD',
                   media_type: 'PHOTO',
