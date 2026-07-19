@@ -251,6 +251,10 @@ export class InternalController {
         name: i.name,
         identifier: i.providerIdentifier,
         picture: i.picture,
+        // Provider account id (Facebook Page id / Instagram user id). Needed by
+        // callers to compose a Meta Ads `object_story_id` (<pageId>_<postId>)
+        // so an organic post can be boosted into an ad with no manual step.
+        internalId: i.internalId,
         // Per-network caption character limit, so callers can keep posts compliant.
         maxLength: this.safeMaxLength(i.providerIdentifier),
       }));
