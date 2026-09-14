@@ -150,12 +150,24 @@ const TikTokSettings: FC<{ values?: any }> = () => {
     };
   }, [selectedCount, isUploadMode, setPostNowLabel]);
 
-  // Branded content cannot be private.
+  // Branded content cannot be private. This is enforced by validation, NOT by
+  // clearing privacy_level: clearing it is destructive and unticking branded
+  // content could never restore it, which dead-ended the composer.
+  //
+  // Turning disclosure off must also clear the brand claims. They live inside a
+  // visually hidden container, so a stale `true` here is invisible to the user
+  // while still blocking every publish attempt.
   useEffect(() => {
-    if (brand_content_toggle && privacy_level === 'SELF_ONLY') {
-      setValue('privacy_level', '');
+    if (disclose) {
+      return;
     }
-  }, [brand_content_toggle, privacy_level, setValue]);
+    if (brand_organic_toggle) {
+      setValue('brand_organic_toggle', false);
+    }
+    if (brand_content_toggle) {
+      setValue('brand_content_toggle', false);
+    }
+  }, [disclose, brand_organic_toggle, brand_content_toggle, setValue]);
 
   // Never keep a privacy value TikTok did not offer for this creator.
   useEffect(() => {
@@ -345,6 +357,16 @@ const TikTokSettings: FC<{ values?: any }> = () => {
               )}
             </div>
           )}
+          {brand_content_toggle &&
+            (creator?.privacyOptions?.length || 0) > 0 &&
+            creator!.privacyOptions.every((o) => o === 'SELF_ONLY') && (
+              <div className="text-[13px] mt-[6px] text-[#FF9800] text-balance">
+                {t(
+                  'tiktok_branded_private_deadlock',
+                  'Branded content cannot be posted privately, and "Only me" is the only visibility available for this account. Turn off "Branded content" to publish.'
+                )}
+              </div>
+            )}
 
           {/* ---- auto add music: photos only ---- */}
           {isPhoto && (
@@ -592,7 +614,11 @@ export default withProvider({
       if (s.disclose && !s.brand_organic_toggle && !s.brand_content_toggle) {
         return 'You need to indicate if your content promotes yourself, a third party, or both.';
       }
-      if (s.brand_content_toggle && s.privacy_level === 'SELF_ONLY') {
+      if (
+        s.disclose &&
+        s.brand_content_toggle &&
+        s.privacy_level === 'SELF_ONLY'
+      ) {
         return 'Branded content visibility cannot be set to private.';
       }
     }
