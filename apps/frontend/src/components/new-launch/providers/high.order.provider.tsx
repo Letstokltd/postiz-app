@@ -93,6 +93,7 @@ export const withProvider = function <T extends object>(params: {
       setChars,
       setComments,
       setHide,
+      setBlocker,
     } = useLaunchStore(
       useShallow((state) => ({
         date: state.date,
@@ -112,6 +113,7 @@ export const withProvider = function <T extends object>(params: {
         setPostComment: state.setPostComment,
         setEditor: state.setEditor,
         setChars: state.setChars,
+        setBlocker: state.setBlocker,
         selectedIntegration: state.selectedIntegrations.find(
           (p) => p.integration.id === props.id
         ),
@@ -191,6 +193,49 @@ export const withProvider = function <T extends object>(params: {
       criteriaMode: 'all',
       reValidateMode: 'onChange',
     });
+
+    // Validity must be known BEFORE the user clicks publish — TikTok requires
+    // the publish action to be disabled while required settings are missing.
+    // Previously checkValidity only ran inside the submit handler.
+    const watchedSettings = form.watch();
+    const watchedKey = JSON.stringify(watchedSettings ?? {});
+
+    useEffect(() => {
+      if (!checkValidity) {
+        return;
+      }
+
+      let cancelled = false;
+
+      (async () => {
+        try {
+          const result = await checkValidity(
+            value.map((p) => p.media || []),
+            form.getValues() as any,
+            JSON.parse(selectedIntegration.integration.additionalSettings || '[]')
+          );
+
+          if (!cancelled) {
+            setBlocker(props.id, result === true ? null : String(result));
+          }
+        } catch (err) {
+          if (!cancelled) {
+            setBlocker(props.id, null);
+          }
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [watchedKey, value, props.id]);
+
+    // Never leave a blocker behind for a channel that was removed.
+    useEffect(() => {
+      return () => {
+        setBlocker(props.id, null);
+      };
+    }, [props.id]);
 
     useImperativeHandle(
       ref,

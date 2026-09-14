@@ -14,6 +14,7 @@ import { TikTokDto } from '@gitroom/nestjs-libraries/dtos/posts/providers-settin
 import { rewriteExternalMediaUrl } from '@gitroom/nestjs-libraries/integrations/social/rewrite-external-media-url';
 import {
   normalizeTikTokSettings,
+  TIKTOK_AUDITED,
 } from '@gitroom/nestjs-libraries/integrations/social/tiktok-defaults';
 import { timer } from '@gitroom/helpers/utils/timer';
 import { Integration } from '@prisma/client';
@@ -39,7 +40,8 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
   dto = TikTokDto;
   editor = 'normal' as const;
   maxLength() {
-    return 2000;
+    // TikTok video caption limit is 2200 UTF-16 units.
+    return 2200;
   }
 
   override handleErrors(body: string):
@@ -348,11 +350,17 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     };
   }
 
-  async maxVideoLength(accessToken: string) {
-    const {
-      data: { max_video_post_duration_sec },
-    } = await (
-      await fetch(
+  /**
+   * Everything the publishing screen needs to render correctly. TikTok requires
+   * the UI to show the LATEST creator nickname and to offer only the privacy
+   * options and interaction toggles this creator actually has available, so
+   * this is queried each time the composer opens rather than cached.
+   *
+   * Exposed to the frontend through POST /integrations/function.
+   */
+  async creatorInfo(accessToken: string) {
+    const response = await (
+      await this.fetch(
         'https://open.tiktokapis.com/v2/post/publish/creator_info/query/',
         {
           method: 'POST',
@@ -364,9 +372,32 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
       )
     ).json();
 
+    const data = response?.data || {};
+
     return {
-      maxDurationSeconds: max_video_post_duration_sec,
+      nickname: data.creator_nickname || '',
+      username: data.creator_username || '',
+      avatar: data.creator_avatar_url || '',
+      privacyOptions: (data.privacy_level_options || []) as string[],
+      commentDisabled: !!data.comment_disabled,
+      duetDisabled: !!data.duet_disabled,
+      stitchDisabled: !!data.stitch_disabled,
+      maxDurationSeconds: data.max_video_post_duration_sec,
+      audited: TIKTOK_AUDITED,
     };
+  }
+
+  async maxVideoLength(accessToken: string) {
+    const { maxDurationSeconds } = await this.creatorInfo(accessToken);
+    return { maxDurationSeconds };
+  }
+
+  private isVideo(path?: string): boolean {
+    if (!path) {
+      return false;
+    }
+    const clean = path.split('?')[0]!.toLowerCase();
+    return /\.(mp4|mov|webm|m4v)$/.test(clean) || clean.includes('mp4');
   }
 
   private async uploadedVideoSuccess(
@@ -374,8 +405,11 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     publishId: string,
     accessToken: string
   ): Promise<{ url: string; id: number }> {
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
+    // Bounded at ~5 minutes. The previous `while (true)` could pin a worker
+    // indefinitely if TikTok never reached a terminal status.
+    const maxAttempts = 30;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const post = await (
         await this.fetch(
           'https://open.tiktokapis.com/v2/post/publish/status/fetch/',
@@ -428,6 +462,13 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
 
       await timer(10000);
     }
+
+    throw new BadBody(
+      'tiktok-publish-timeout',
+      JSON.stringify({ publishId }),
+      Buffer.from('publish status timeout'),
+      'TikTok is still processing this video. Check your TikTok profile in a few minutes.'
+    );
   }
 
   private rewriteMediaUrl(url: string): string {
@@ -439,13 +480,13 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     isPhoto: boolean
   ): string {
     switch (method) {
-      case 'DIRECT_POST':
-        return isPhoto ? '/content/init/' : '/video/init/';
       case 'UPLOAD':
-      default:
-        // Default to self-upload (draft / inbox). Direct posting requires the
-        // TikTok "direct post" permission, which is not granted yet.
+        // TikTok's separate "upload without posting" flow: the video lands in
+        // the creator's inbox and they publish it from the TikTok app.
         return isPhoto ? '/content/init/' : '/inbox/video/init/';
+      case 'DIRECT_POST':
+      default:
+        return isPhoto ? '/content/init/' : '/video/init/';
     }
   }
 
@@ -459,14 +500,57 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     const settings = normalizeTikTokSettings(
       (firstPost.settings || {}) as Partial<TikTokDto> & Record<string, unknown>
     );
-    const isPhoto = (firstPost?.media?.[0]?.path?.indexOf('mp4') || -1) === -1;
+    const isDirectPost = settings.content_posting_method === 'DIRECT_POST';
+    const isPhoto = !this.isVideo(firstPost?.media?.[0]?.path);
+
+    if (isDirectPost) {
+      // TikTok requires these rules to hold at publish time, not only in the
+      // browser. See developers.tiktok.com/doc/content-sharing-guidelines
+      if (!settings.privacy_level) {
+        throw new BadBody(
+          'tiktok-missing-privacy',
+          JSON.stringify({ settings }),
+          Buffer.from('missing privacy_level'),
+          'Select who can see this video before posting to TikTok.'
+        );
+      }
+
+      if (
+        (settings as { disclose?: boolean }).disclose &&
+        !settings.brand_organic_toggle &&
+        !settings.brand_content_toggle
+      ) {
+        throw new BadBody(
+          'tiktok-missing-disclosure',
+          JSON.stringify({ settings }),
+          Buffer.from('missing commercial disclosure'),
+          'You need to indicate if your content promotes yourself, a third party, or both.'
+        );
+      }
+
+      if (
+        settings.brand_content_toggle &&
+        settings.privacy_level === 'SELF_ONLY'
+      ) {
+        throw new BadBody(
+          'tiktok-branded-private',
+          JSON.stringify({ settings }),
+          Buffer.from('branded content cannot be private'),
+          'Branded content visibility cannot be set to private.'
+        );
+      }
+    }
+
+    // The caption shown in the composer IS the caption sent to TikTok.
+    const caption = settings.title || firstPost.message || '';
+
     const {
       data: { publish_id },
     } = await (
       await this.fetch(
         `https://open.tiktokapis.com/v2/post/publish${this.postingMethod(
           settings.content_posting_method,
-          (firstPost?.media?.[0]?.path?.indexOf('mp4') || -1) === -1
+          isPhoto
         )}`,
         {
           method: 'POST',
@@ -475,43 +559,37 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
             Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
-            ...(settings.content_posting_method === 'DIRECT_POST'
+            ...(isDirectPost
               ? {
                   post_info: {
-                    ...((settings.title ||
-                    (firstPost.message && !isPhoto))
+                    ...(isPhoto
                       ? {
-                          title:
-                            settings.title ||
-                            (isPhoto ? '' : firstPost.message),
+                          title: caption.slice(0, 90),
+                          description: caption.slice(0, 4000),
                         }
-                      : {}),
-                    ...(isPhoto ? { description: firstPost.message } : {}),
-                    privacy_level:
-                      settings.privacy_level || 'SELF_ONLY',
-                    disable_duet: !settings.duet || false,
-                    disable_comment: !settings.comment || false,
-                    disable_stitch: !settings.stitch || false,
+                      : { title: caption.slice(0, 2200) }),
+                    privacy_level: settings.privacy_level,
+                    disable_duet: !settings.duet,
+                    disable_comment: !settings.comment,
+                    disable_stitch: !settings.stitch,
                     is_aigc: settings.video_made_with_ai || false,
                     brand_content_toggle:
                       settings.brand_content_toggle || false,
                     brand_organic_toggle:
                       settings.brand_organic_toggle || false,
-                    ...((firstPost?.media?.[0]?.path?.indexOf('mp4') || -1) ===
-                    -1
-                      ? {
-                          auto_add_music:
-                            settings.autoAddMusic === 'yes',
-                        }
+                    ...(isPhoto
+                      ? { auto_add_music: settings.autoAddMusic === 'yes' }
                       : {}),
                   },
                 }
               : {}),
-            ...((firstPost?.media?.[0]?.path?.indexOf('mp4') || -1) > -1
+            ...(!isPhoto
               ? {
                   source_info: {
                     source: 'PULL_FROM_URL',
-                    video_url: this.rewriteMediaUrl(firstPost?.media?.[0]?.path!),
+                    video_url: this.rewriteMediaUrl(
+                      firstPost?.media?.[0]?.path!
+                    ),
                     ...(firstPost?.media?.[0]?.thumbnailTimestamp!
                       ? {
                           video_cover_timestamp_ms:
@@ -524,12 +602,11 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
                   source_info: {
                     source: 'PULL_FROM_URL',
                     photo_cover_index: 0,
-                    photo_images: firstPost.media?.map((p) => this.rewriteMediaUrl(p.path)),
+                    photo_images: firstPost.media?.map((p) =>
+                      this.rewriteMediaUrl(p.path)
+                    ),
                   },
-                  post_mode:
-                    settings.content_posting_method === 'DIRECT_POST'
-                      ? 'DIRECT_POST'
-                      : 'MEDIA_UPLOAD',
+                  post_mode: isDirectPost ? 'DIRECT_POST' : 'MEDIA_UPLOAD',
                   media_type: 'PHOTO',
                 }),
           }),
