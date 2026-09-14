@@ -60,6 +60,15 @@ export function normalizeTikTokSettings<
     merged.content_posting_method = 'DIRECT_POST';
   }
 
+  // A cleared disclosure toggle must also clear the brand claims. In the
+  // composer the brand checkboxes sit inside a hidden container, so a stale
+  // `true` is invisible to the user yet still rejected by TikTok. Only act on
+  // an explicit `false` so API callers that never send `disclose` are unaffected.
+  if ((merged as { disclose?: boolean }).disclose === false) {
+    merged.brand_content_toggle = false;
+    merged.brand_organic_toggle = false;
+  }
+
   // Idempotent: this function runs twice (save time and publish time).
   if (merged.content_posting_method === 'UPLOAD') {
     for (const key of DIRECT_POST_ONLY_KEYS) {
