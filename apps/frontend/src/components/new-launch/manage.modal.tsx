@@ -44,6 +44,7 @@ import { useHasScroll } from '@gitroom/frontend/components/ui/is.scroll.hook';
 import { useShortlinkPreference } from '@gitroom/frontend/components/settings/shortlink-preference.component';
 import dayjs from 'dayjs';
 import { Button } from '@gitroom/react/form/button';
+import { PublishStatusModal } from '@gitroom/frontend/components/new-launch/publish.status.modal';
 
 function countCharacters(text: string, type: string): number {
   if (type !== 'x') {
@@ -80,6 +81,8 @@ export const ManageModal: FC<AddEditModalProps> = (props) => {
     current,
     activateExitButton,
     setHide,
+    blockers,
+    postNowLabel,
   } = useLaunchStore(
     useShallow((state) => ({
       hide: state.hide,
@@ -96,8 +99,34 @@ export const ManageModal: FC<AddEditModalProps> = (props) => {
       setSelectedIntegrations: state.setSelectedIntegrations,
       locked: state.locked,
       activateExitButton: state.activateExitButton,
+      blockers: state.blockers,
+      postNowLabel: state.postNowLabel,
     }))
   );
+
+  // A provider reports a blocking reason as soon as its settings become
+  // invalid. TikTok requires every publishing/scheduling action to be disabled
+  // while a required setting (e.g. commercial disclosure) is incomplete.
+  const blockerReasons = useMemo(
+    () => Object.values(blockers || {}).filter(Boolean),
+    [blockers]
+  );
+  const hasBlockers = blockerReasons.length > 0;
+  const cannotPublish =
+    selectedIntegrations.length === 0 || loading || locked || hasBlockers;
+
+  // TikTok requires the creator nickname and the posting settings to be
+  // visible on the publishing screen, not hidden behind a collapsed panel.
+  useEffect(() => {
+    if (current === 'global') {
+      return;
+    }
+    if (
+      integrations.find((p) => p.id === current)?.identifier === 'tiktok'
+    ) {
+      setShowSettings(true);
+    }
+  }, [current, integrations]);
 
   useEffect(() => {
     if (hide) {
@@ -419,13 +448,19 @@ export const ManageModal: FC<AddEditModalProps> = (props) => {
               body: JSON.stringify(data),
             });
 
+        const isImmediatePost = type === 'now' && !addEditSets;
+
         if (!addEditSets) {
           mutate();
-          toaster.show(
-            !existingData.integration
-              ? t('added_successfully', 'Added successfully')
-              : t('updated_successfully', 'Updated successfully')
-          );
+          // "Added successfully" is scheduler language. An immediate post must
+          // confirm the publish itself, which the status modal below does.
+          if (!isImmediatePost) {
+            toaster.show(
+              !existingData.integration
+                ? t('added_successfully', 'Added successfully')
+                : t('updated_successfully', 'Updated successfully')
+            );
+          }
         }
         if (customClose) {
           setTimeout(() => {
@@ -435,6 +470,16 @@ export const ManageModal: FC<AddEditModalProps> = (props) => {
 
         if (!addEditSets) {
           modal.closeAll();
+
+          if (isImmediatePost) {
+            modal.openModal({
+              title: '',
+              withCloseButton: false,
+              closeOnEscape: false,
+              closeOnClickOutside: false,
+              children: <PublishStatusModal group={group} />,
+            });
+          }
         }
       }
     },
@@ -566,6 +611,11 @@ export const ManageModal: FC<AddEditModalProps> = (props) => {
             )}
           </div>
           <div className="pe-[20px] flex items-center justify-end gap-[8px]">
+            {hasBlockers && (
+              <div className="text-[13px] text-[#FF9800] max-w-[320px] text-balance text-end">
+                {blockerReasons[0]}
+              </div>
+            )}
             {existingData?.integration && (
               <button
                 onClick={deletePost}
@@ -607,57 +657,67 @@ export const ManageModal: FC<AddEditModalProps> = (props) => {
                 Save Set
               </button>
             )}
-            {!addEditSets && (
-              <div className="group cursor-pointer relative">
-                <button
-                  disabled={
-                    selectedIntegrations.length === 0 || loading || locked
-                  }
-                  onClick={schedule('schedule')}
-                  className="text-white relative min-w-[180px] btnSub disabled:cursor-not-allowed disabled:opacity-80 outline-none gap-[8px] flex justify-center items-center h-[44px] rounded-[8px] bg-[#612BD3] ps-[20px] pe-[16px]"
-                >
-                  {loading && (
-                    <div className="absolute left-[50%] top-[50%] -translate-y-[50%] -translate-x-[50%]">
-                      <div className="animate-spin h-[20px] w-[20px] border-4 border-white border-t-transparent rounded-full" />
-                    </div>
-                  )}
-                  <div
-                    className={clsx(
-                      'text-[15px] font-[600]',
-                      loading && 'invisible'
-                    )}
-                  >
-                    {selectedIntegrations.length === 0
-                      ? t('check_circles_above', 'Check the circles above')
-                      : dummy
-                      ? t('create_output', 'Create output')
-                      : !existingData?.integration
-                      ? t('add_to_calendar', 'Add to calendar')
-                      : existingData?.posts?.[0]?.state === 'DRAFT'
-                      ? t('schedule', 'Schedule')
-                      : t('update', 'Update')}
-                  </div>
-                  {!dummy && (
-                    <div className="flex justify-center items-center h-[20px] w-[20px] pt-[4px] arrow-change">
-                      <DropdownArrowSmallIcon className="group-hover:rotate-180 text-white" />
-                    </div>
-                  )}
-                </button>
-
-                {!dummy && (
-                  <button
-                    onClick={schedule('now')}
-                    disabled={
-                      selectedIntegrations.length === 0 || loading || locked
+            {!addEditSets && !dummy && (
+              <button
+                disabled={cannotPublish}
+                onClick={schedule('now')}
+                {...(hasBlockers
+                  ? {
+                      'data-tooltip-id': 'tooltip',
+                      'data-tooltip-content': blockerReasons[0],
                     }
-                    className="rounded-[8px] z-[300] disabled:cursor-not-allowed disabled:opacity-80 hidden group-hover:flex absolute bottom-[100%] -left-[12px] p-[12px] w-[206px] bg-newBgColorInner"
-                  >
-                    <div className="text-white rounded-[8px] bg-[#D82D7E] h-[44px] w-full flex justify-center items-center post-now">
-                      {t('post_now', 'Post Now')}
-                    </div>
-                  </button>
+                  : {})}
+                className="post-now text-white relative min-w-[150px] btnSub disabled:cursor-not-allowed disabled:opacity-50 outline-none flex justify-center items-center h-[44px] rounded-[8px] bg-[#D82D7E] px-[20px]"
+              >
+                {loading && (
+                  <div className="absolute left-[50%] top-[50%] -translate-y-[50%] -translate-x-[50%]">
+                    <div className="animate-spin h-[20px] w-[20px] border-4 border-white border-t-transparent rounded-full" />
+                  </div>
                 )}
-              </div>
+                <div
+                  className={clsx(
+                    'text-[15px] font-[600]',
+                    loading && 'invisible'
+                  )}
+                >
+                  {postNowLabel || t('post_now', 'Post Now')}
+                </div>
+              </button>
+            )}
+            {!addEditSets && (
+              <button
+                disabled={cannotPublish}
+                onClick={schedule('schedule')}
+                {...(hasBlockers
+                  ? {
+                      'data-tooltip-id': 'tooltip',
+                      'data-tooltip-content': blockerReasons[0],
+                    }
+                  : {})}
+                className="text-white relative min-w-[180px] btnSub disabled:cursor-not-allowed disabled:opacity-50 outline-none flex justify-center items-center h-[44px] rounded-[8px] bg-[#612BD3] px-[20px]"
+              >
+                {loading && (
+                  <div className="absolute left-[50%] top-[50%] -translate-y-[50%] -translate-x-[50%]">
+                    <div className="animate-spin h-[20px] w-[20px] border-4 border-white border-t-transparent rounded-full" />
+                  </div>
+                )}
+                <div
+                  className={clsx(
+                    'text-[15px] font-[600]',
+                    loading && 'invisible'
+                  )}
+                >
+                  {selectedIntegrations.length === 0
+                    ? t('check_circles_above', 'Check the circles above')
+                    : dummy
+                    ? t('create_output', 'Create output')
+                    : !existingData?.integration
+                    ? t('schedule_post', 'Schedule')
+                    : existingData?.posts?.[0]?.state === 'DRAFT'
+                    ? t('schedule', 'Schedule')
+                    : t('update', 'Update')}
+                </div>
+              </button>
             )}
           </div>
         </div>

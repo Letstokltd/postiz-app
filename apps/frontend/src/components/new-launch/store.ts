@@ -42,6 +42,17 @@ interface StoreState {
   locked: boolean;
   hide: boolean;
   setLocked: (locked: boolean) => void;
+  /**
+   * Per-integration blocking validation reasons. While any entry is present the
+   * publish / schedule actions must be disabled. TikTok requires the publish
+   * action to be unavailable while required settings are incomplete.
+   */
+  blockers: Record<string, string>;
+  setBlocker: (id: string, reason: string | null) => void;
+  /** Lets a provider rename the immediate-post action (e.g. TikTok draft
+   *  upload must not be labelled "Post now"). */
+  postNowLabel: string | null;
+  setPostNowLabel: (label: string | null) => void;
   integrations: Integrations[];
   selectedIntegrations: SelectedIntegrations[];
   global: Values[];
@@ -150,6 +161,8 @@ const initialState = {
   current: 'global',
   locked: false,
   hide: false,
+  blockers: {} as Record<string, string>,
+  postNowLabel: null as string | null,
   integrations: [] as Integrations[],
   selectedIntegrations: [] as SelectedIntegrations[],
   global: [] as Values[],
@@ -525,6 +538,26 @@ export const useLaunchStore = create<StoreState>()((set) => ({
     set((state) => ({
       locked: locked,
     })),
+  setBlocker: (id: string, reason: string | null) =>
+    set((state) => {
+      const next = { ...state.blockers };
+      if (reason) {
+        if (next[id] === reason) {
+          return {} as any;
+        }
+        next[id] = reason;
+      } else {
+        if (!(id in next)) {
+          return {} as any;
+        }
+        delete next[id];
+      }
+      return { blockers: next };
+    }),
+  setPostNowLabel: (label: string | null) =>
+    set((state) =>
+      state.postNowLabel === label ? ({} as any) : { postNowLabel: label }
+    ),
   setHide: (hide: boolean) =>
     set((state) => ({
       hide: hide,
