@@ -441,12 +441,28 @@ export const ManageModal: FC<AddEditModalProps> = (props) => {
       }
 
       if (!dummy) {
-        addEditSets
-          ? addEditSets(data)
-          : await fetch('/posts', {
-              method: 'POST',
-              body: JSON.stringify(data),
-            });
+        // POST /posts returns [{ postId, integration }]. The `group` sent in the
+        // body is NOT what gets stored — the repository writes its own uuid — so
+        // the publish status has to be tracked by the returned post ids.
+        let createdPostIds: string[] = [];
+
+        if (addEditSets) {
+          addEditSets(data);
+        } else {
+          const response = await fetch('/posts', {
+            method: 'POST',
+            body: JSON.stringify(data),
+          });
+
+          try {
+            const created = await response.json();
+            createdPostIds = Array.isArray(created)
+              ? created.map((c: any) => c?.postId).filter(Boolean)
+              : [];
+          } catch (err) {
+            createdPostIds = [];
+          }
+        }
 
         const isImmediatePost = type === 'now' && !addEditSets;
 
@@ -477,7 +493,12 @@ export const ManageModal: FC<AddEditModalProps> = (props) => {
               withCloseButton: false,
               closeOnEscape: false,
               closeOnClickOutside: false,
-              children: <PublishStatusModal group={group} />,
+              children: (
+                <PublishStatusModal
+                  postIds={createdPostIds}
+                  onDone={() => mutate()}
+                />
+              ),
             });
           }
         }

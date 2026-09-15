@@ -424,7 +424,7 @@ const TikTokSettings: FC<{ values?: any }> = () => {
               <div className="text-[13px] mt-[8px] opacity-70 text-balance">
                 {t(
                   'tiktok_interactions_disabled',
-                  'Some interactions are turned off in your TikTok account settings and cannot be enabled from here.'
+                  'Some interactions are not available for this TikTok account — a private account cannot be dueted or stitched — so they cannot be enabled from here.'
                 )}
               </div>
             )}
