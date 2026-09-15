@@ -14,6 +14,10 @@ import { useT } from '@gitroom/react/translation/get.transation.service.client';
  *
  * `POST /posts` only enqueues the job, so the publish result has to be polled
  * from the post record itself.
+ *
+ * NOTE: poll by post id, never by the `group` sent in the create payload —
+ * `createOrUpdatePost` discards it and writes its own uuid, so a lookup by the
+ * client-side group always comes back empty.
  */
 
 const POLL_MS = 3000;
@@ -67,15 +71,30 @@ const Step: FC<{
   </div>
 );
 
-export const PublishStatusModal: FC<{ group: string }> = ({ group }) => {
+export const PublishStatusModal: FC<{
+  postIds: string[];
+  onDone?: () => void;
+}> = ({ postIds, onDone }) => {
   const fetch = useFetch();
   const modal = useModals();
   const t = useT();
   const [stopped, setStopped] = useState(false);
 
   const { data } = useSWR(
-    `publish-status-${group}`,
-    async () => (await fetch(`/posts/group/${group}`)).json(),
+    postIds?.length ? ['publish-status', ...postIds] : null,
+    async () => {
+      const rows = await Promise.all(
+        postIds.map(async (id) => {
+          try {
+            const result = await (await fetch(`/posts/${id}`)).json();
+            return result?.posts?.[0];
+          } catch (err) {
+            return undefined;
+          }
+        })
+      );
+      return rows.filter(Boolean);
+    },
     {
       refreshInterval: stopped ? 0 : POLL_MS,
       revalidateOnFocus: false,
@@ -83,7 +102,7 @@ export const PublishStatusModal: FC<{ group: string }> = ({ group }) => {
     }
   );
 
-  const posts = (data?.posts || []) as PostRow[];
+  const posts = (data || []) as PostRow[];
 
   const { allSettled, anyError, anyPublished } = useMemo(() => {
     const settled =
@@ -107,7 +126,9 @@ export const PublishStatusModal: FC<{ group: string }> = ({ group }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  const title = !allSettled
+  const title = !postIds?.length
+    ? t('post_submitted', 'Post submitted')
+    : !allSettled
     ? t('publishing', 'Publishing…')
     : anyError && !anyPublished
     ? t('publish_failed', 'Publishing failed')
@@ -120,7 +141,17 @@ export const PublishStatusModal: FC<{ group: string }> = ({ group }) => {
       <div className="text-[20px] font-[600]">{title}</div>
 
       <div className="flex flex-col gap-[24px]">
-        {posts.length === 0 && (
+        {!postIds?.length && (
+          <Step
+            label={t('publish_step_untracked', 'Your post was submitted')}
+            status="done"
+            note={t(
+              'publish_untracked_note',
+              'Publishing is running in the background, but the status could not be tracked here. Check the calendar in a few minutes to confirm it published.'
+            )}
+          />
+        )}
+        {!!postIds?.length && posts.length === 0 && (
           <Step
             label={t('publish_step_submitted', 'Submitting your post…')}
             status="active"
@@ -203,10 +234,17 @@ export const PublishStatusModal: FC<{ group: string }> = ({ group }) => {
       <div className="flex justify-end">
         <button
           type="button"
-          onClick={() => modal.closeAll()}
+          onClick={() => {
+            // The calendar was refreshed before publishing finished, so refresh
+            // again on the way out or it still shows the queued state.
+            onDone?.();
+            modal.closeAll();
+          }}
           className="h-[44px] px-[24px] rounded-[8px] bg-[#612BD3] text-white text-[15px] font-[600]"
         >
-          {allSettled || stopped ? t('close', 'Close') : t('hide', 'Hide')}
+          {allSettled || stopped || !postIds?.length
+            ? t('close', 'Close')
+            : t('hide', 'Hide')}
         </button>
       </div>
     </div>
