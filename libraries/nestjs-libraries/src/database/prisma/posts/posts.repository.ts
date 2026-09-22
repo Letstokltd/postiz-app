@@ -37,7 +37,9 @@ export class PostsRepository {
           disabled: false,
         },
         publishDate: {
-          gte: dayjs.utc().subtract(2, 'hour').toDate(),
+          // Posts whose workflow died (or never started) stay QUEUE forever
+          // once they fall outside a 2-hour window. Keep a week of backlog.
+          gte: dayjs.utc().subtract(7, 'day').toDate(),
           lt: dayjs.utc().add(2, 'hour').toDate(),
         },
         state: 'QUEUE',

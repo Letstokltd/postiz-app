@@ -19,6 +19,7 @@ import dayjs from 'dayjs';
 import { GaxiosResponse } from 'gaxios/build/src/common';
 import Schema$Video = youtube_v3.Schema$Video;
 import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
+import { rewriteExternalMediaUrl } from '@gitroom/nestjs-libraries/integrations/social/rewrite-external-media-url';
 
 const clientAndYoutube = () => {
   const client = new google.auth.OAuth2({
@@ -300,11 +301,50 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
 
     const { settings }: { settings: YoutubeSettingsDto } = firstPost;
 
-    const response = await axios({
-      url: firstPost?.media?.[0]?.path,
-      method: 'GET',
-      responseType: 'stream',
-    });
+    const mediaFile = firstPost?.media?.[0] as
+      | { path?: string; url?: string }
+      | undefined;
+    const sourceUrl =
+      mediaFile?.url && mediaFile.url.indexOf('http') === 0
+        ? mediaFile.url
+        : rewriteExternalMediaUrl(mediaFile?.path || '');
+
+    if (!sourceUrl || sourceUrl.indexOf('http') !== 0) {
+      throw new BadBody(
+        'youtube-missing-media',
+        JSON.stringify({ sourceUrl }),
+        Buffer.from('missing video'),
+        'YouTube post is missing a downloadable video.'
+      );
+    }
+
+    // Buffer the file so the YouTube resumable upload gets a known length.
+    // A raw axios stream (no Content-Length) can sit open until the activity
+    // times out, and the post is left in QUEUE.
+    let video: Buffer;
+    let mimeType = 'video/mp4';
+    try {
+      const downloaded = await axios.get(sourceUrl, {
+        responseType: 'arraybuffer',
+        timeout: 120_000,
+        maxContentLength: 256 * 1024 * 1024,
+        maxBodyLength: 256 * 1024 * 1024,
+      });
+      video = Buffer.from(downloaded.data);
+      const header = downloaded.headers?.['content-type'];
+      if (typeof header === 'string' && header.includes('/')) {
+        mimeType = header.split(';')[0]!;
+      }
+    } catch (err: any) {
+      throw new BadBody(
+        'youtube-media-download',
+        JSON.stringify({ sourceUrl, message: err?.message }),
+        Buffer.from('media download failed'),
+        `Could not download the video for YouTube (${
+          err?.message || 'request failed'
+        }).`
+      );
+    }
 
     const all: GaxiosResponse<Schema$Video> = await this.runInConcurrent(
       async () =>
@@ -326,7 +366,8 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
             },
           },
           media: {
-            body: response.data,
+            body: video,
+            mimeType,
           },
         }),
       true

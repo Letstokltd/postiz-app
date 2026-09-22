@@ -19,6 +19,7 @@ import { postId as postIdSearchParam } from '@gitroom/nestjs-libraries/temporal/
 const proxyTaskQueue = (taskQueue: string) => {
   return proxyActivities<PostActivity>({
     startToCloseTimeout: '10 minute',
+    scheduleToStartTimeout: '15 minute',
     taskQueue,
     retry: {
       maximumAttempts: 3,
@@ -46,6 +47,16 @@ const {
 });
 
 const poke = defineSignal('poke');
+
+function postErrorMessage(err: unknown): string {
+  if (err instanceof ActivityFailure) {
+    return err.cause?.message || err.message || 'Post failed';
+  }
+  if (err instanceof Error) {
+    return err.message || 'Post failed';
+  }
+  return 'Post failed';
+}
 
 const iterate = Array.from({ length: 5 });
 
@@ -98,6 +109,7 @@ export async function postWorkflowV101({
 
   // if refresh is needed from last time, let's inform the user
   if (post.integration?.refreshNeeded) {
+    await changeState(post.id, 'ERROR', 'Channel needs reconnection');
     await inAppNotification(
       post.organizationId,
       `We couldn't post to ${post.integration?.providerIdentifier} for ${post?.integration?.name}`,
@@ -115,6 +127,7 @@ export async function postWorkflowV101({
 
   // if it's disabled, inform the user
   if (post.integration?.disabled) {
+    await changeState(post.id, 'ERROR', 'Channel is disabled');
     await inAppNotification(
       post.organizationId,
       `We couldn't post to ${post.integration?.providerIdentifier} for ${post?.integration?.name}`,
@@ -206,7 +219,12 @@ export async function postWorkflowV101({
         ) {
           const refresh = await refreshToken(post.integration);
           if (!refresh || !refresh.accessToken) {
-            await changeState(postsList[0].id, 'ERROR', err, postsList);
+            await changeState(
+              postsList[0].id,
+              'ERROR',
+              postErrorMessage(err),
+              postsList
+            );
             return false;
           }
 
@@ -215,7 +233,12 @@ export async function postWorkflowV101({
         }
 
         // for other errors, change state and inform the user if needed
-        await changeState(postsList[0].id, 'ERROR', err, postsList);
+        await changeState(
+          postsList[0].id,
+          'ERROR',
+          postErrorMessage(err),
+          postsList
+        );
 
         // specific case for bad body errors
         if (
@@ -245,6 +268,11 @@ export async function postWorkflowV101({
     }
 
     if (postsResults.length === before) {
+      await changeState(
+        postsList[0].id,
+        'ERROR',
+        'All retries exhausted without success'
+      );
       await sendAdminNotification(
         `[Postiz] Post Failed: ${post.integration?.providerIdentifier} (retries exhausted)`,
         `<p>Post failed for org <b>${post.organizationId}</b> on <b>${post.integration?.providerIdentifier}</b> channel <b>${post.integration?.name}</b>.</p><p>Reason: All retries exhausted without success.</p>`
