@@ -45,6 +45,19 @@ export class PostActivity {
   async searchForMissingThreeHoursPosts() {
     const list = await this._postService.searchForMissingThreeHoursPosts();
     for (const post of list) {
+      const stale =
+        new Date(post.publishDate).getTime() < Date.now() - 30 * 60 * 1000;
+      if (stale) {
+        try {
+          const running = await this._temporalService.client.getWorkflowHandle(
+            `post_${post.id}`
+          );
+          await running.terminate(
+            'Restarting a QUEUE post whose workflow did not finish'
+          );
+        } catch (err) {}
+      }
+
       await this._temporalService.client
         .getRawClient()
         .workflow.signalWithStart('postWorkflowV101', {
