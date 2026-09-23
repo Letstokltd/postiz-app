@@ -148,7 +148,14 @@ export class NoAuthIntegrationsController {
               refresh,
               auth.accessToken
             );
-            return res({ ...newAuth, refreshToken: body.refresh });
+            // body.refresh is the channel id from the reconnect link, not an
+            // OAuth refresh token. Keep the token authenticate() just issued.
+            return res({
+              ...auth,
+              ...newAuth,
+              refreshToken: auth.refreshToken,
+              expiresIn: auth.expiresIn,
+            });
           } catch (err: any) {
             return res({
               error: err.message,

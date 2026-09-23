@@ -337,6 +337,9 @@ export class IntegrationService {
       org,
       String(getIntegrationInformation.id)
     );
+    // Selecting an existing channel deletes this in-between row. Copy its
+    // credentials across, or the old row keeps a dead refresh token and
+    // refreshNeeded stays true, so every post fails before the API call.
     await this._integrationRepository.updateIntegration(id, {
       picture: getIntegrationInformation.picture,
       internalId: String(getIntegrationInformation.id),
@@ -345,6 +348,16 @@ export class IntegrationService {
       inBetweenSteps: false,
       token: getIntegrationInformation.access_token,
       profile: getIntegrationInformation.username,
+      refreshNeeded: false,
+      ...(getIntegration.refreshToken
+        ? { refreshToken: getIntegration.refreshToken }
+        : {}),
+      ...(getIntegration.tokenExpiration
+        ? { tokenExpiration: getIntegration.tokenExpiration }
+        : {}),
+      ...(getIntegration.rootInternalId
+        ? { rootInternalId: getIntegration.rootInternalId }
+        : {}),
     });
 
     return { success: true };
