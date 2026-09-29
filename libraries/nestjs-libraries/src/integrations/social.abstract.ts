@@ -77,9 +77,19 @@ export abstract class SocialAbstract {
     let value: any;
     try {
       value = await func();
-    } catch (err) {
-      const handle = this.handleErrors(safeStringify(err));
-      value = { err: true, value: 'Unknown Error', ...(handle || {}) };
+    } catch (err: any) {
+      // JSON.stringify drops Error.message, so a plain thrown Error would
+      // otherwise reach handleErrors (and the user) as "{}".
+      const message =
+        err?.response?.data?.error?.message || err?.message || '';
+      const handle = this.handleErrors(
+        `${safeStringify(err)} ${message}`
+      );
+      value = {
+        err: true,
+        value: message || 'Unknown Error',
+        ...(handle || {}),
+      };
     }
 
     if (value && value?.err && value?.value) {

@@ -20,6 +20,7 @@ import { GaxiosResponse } from 'gaxios/build/src/common';
 import Schema$Video = youtube_v3.Schema$Video;
 import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
 import { rewriteExternalMediaUrl } from '@gitroom/nestjs-libraries/integrations/social/rewrite-external-media-url';
+import { Readable } from 'node:stream';
 
 const clientAndYoutube = () => {
   const client = new google.auth.OAuth2({
@@ -365,8 +366,10 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
                 settings.selfDeclaredMadeForKids === 'yes',
             },
           },
+          // googleapis pipes the media body, so a raw Buffer throws
+          // "part.body.pipe is not a function" before any request is sent.
           media: {
-            body: video,
+            body: Readable.from(video),
             mimeType,
           },
         }),
