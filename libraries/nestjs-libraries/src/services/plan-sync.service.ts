@@ -9,6 +9,12 @@ export interface PlanDetails {
   socialChannels: number;
   postizTier: string;
   planName: string;
+  /**
+   * LetsTok "Start free" (2026-09-29): overrides the tier's posts_per_month
+   * when set. New Free accounts get 0 — they can connect channels but posting
+   * starts with a paid plan. null/undefined = use the tier's allowance.
+   */
+  postsPerMonth?: number | null;
 }
 
 @Injectable()
@@ -82,11 +88,14 @@ export class PlanSyncService {
         socialChannels?: number;
         postizTier?: string;
         planName?: string;
+        postsPerMonth?: number | null;
       };
       return {
         socialChannels: data.socialChannels ?? 0,
         postizTier: data.postizTier ?? 'FREE',
         planName: data.planName ?? 'Free',
+        postsPerMonth:
+          typeof data.postsPerMonth === 'number' ? data.postsPerMonth : null,
       };
     } catch {
       return null;

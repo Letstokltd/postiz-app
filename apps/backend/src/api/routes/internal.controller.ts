@@ -316,6 +316,20 @@ export class InternalController {
       return { success: false, message: 'No organization found' };
     }
 
+    // LetsTok "Start free": new Free accounts can connect channels but not
+    // post. This route bypasses @CheckPolicies, so enforce the override here.
+    const planDetails = await this._planSyncService.getPlanDetails(
+      body.firebaseUid
+    );
+    if (planDetails?.postsPerMonth === 0) {
+      return {
+        success: false,
+        errorCode: 'POSTING_REQUIRES_PLAN',
+        message:
+          'Posting starts with a paid LetsTok plan. The Free plan can connect channels but not publish or schedule posts. Try Starter for 3 days for $1.',
+      };
+    }
+
     // Validate that every requested channel belongs to this org and is active.
     const orgIntegrations =
       await this._integrationRepository.getIntegrationsList(orgId);
