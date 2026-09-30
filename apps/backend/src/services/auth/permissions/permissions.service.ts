@@ -41,11 +41,18 @@ export class PermissionsService {
     }
 
     const { channel, ...all } = pricing[tier] ?? pricing.FREE;
+    // LetsTok "Start free": the Studio plan can cap posting below the tier
+    // (new Free accounts: 0 — connect channels, post from a paid plan).
+    const postsOverride =
+      planDetails && !usePostizBilling && typeof planDetails.postsPerMonth === 'number'
+        ? { posts_per_month: planDetails.postsPerMonth }
+        : {};
     return {
       subscription,
       options: {
         ...all,
         ...{ channel: channelLimit },
+        ...postsOverride,
       },
     };
   }

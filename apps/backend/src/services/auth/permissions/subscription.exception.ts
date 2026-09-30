@@ -17,10 +17,16 @@ export class SubscriptionExceptionFilter implements ExceptionFilter {
 
     const message = getErrorMessage(error);
 
+    // LetsTok "Start free": posting upsells point at the LetsTok $1 / 3-day
+    // Starter trial (LETSTOK_UPGRADE_URL) instead of Postiz billing.
+    const url =
+      error?.section === Sections.POSTS_PER_MONTH && process.env.LETSTOK_UPGRADE_URL
+        ? process.env.LETSTOK_UPGRADE_URL
+        : process.env.FRONTEND_URL + '/billing';
     response.status(status).json({
       statusCode: status,
       message,
-      url: process.env.FRONTEND_URL + '/billing',
+      url,
     });
   }
 }
@@ -33,7 +39,7 @@ const getErrorMessage = (error: {
     case Sections.POSTS_PER_MONTH:
       switch (error.action) {
         default:
-          return 'You have reached the maximum number of posts for your subscription. Please upgrade your subscription to add more posts.';
+          return 'Posting is not included in your current plan, or you have reached its monthly limit. Upgrade your LetsTok plan (Starter is 3 days for $1) to post and schedule.';
       }
     case Sections.CHANNEL:
       switch (error.action) {
