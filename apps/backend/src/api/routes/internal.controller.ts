@@ -257,6 +257,9 @@ export class InternalController {
         internalId: i.internalId,
         // Per-network caption character limit, so callers can keep posts compliant.
         maxLength: this.safeMaxLength(i.providerIdentifier),
+        // The channel's token expired and the owner must reconnect it before
+        // posts go out (Clients Desk channel health).
+        refreshNeeded: !!(i as { refreshNeeded?: boolean }).refreshNeeded,
       }));
 
     return { success: true, integrations };
@@ -487,6 +490,101 @@ export class InternalController {
       return { success: true, posts };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Failed to list posts' };
+    }
+  }
+
+  /**
+   * Edit a post and/or change its state (LetsTok Clients Desk: approve a parked
+   * draft). Uses the same upsert-by-id path as the editor, so the post keeps
+   * its id, media, channel, settings and tags.
+   *   type 'update'   — change caption/date only, keep the current state
+   *   type 'draft'    — keep (or put back) as a draft
+   *   type 'schedule' — publish at `date` (required)
+   *   type 'now'      — publish now
+   * A post that is already published can only be updated with type 'update'.
+   */
+  @Post('/posts/update')
+  async postsUpdate(
+    @Headers('x-internal-api-key') apiKey: string,
+    @Body()
+    body: {
+      firebaseUid: string;
+      id: string;
+      caption?: string;
+      contentHtml?: string;
+      date?: string;
+      type?: 'update' | 'draft' | 'schedule' | 'now';
+    },
+  ) {
+    this.assertInternalKey(apiKey);
+    if (!body.firebaseUid || !body.id) {
+      return { success: false, message: 'firebaseUid and id are required' };
+    }
+    const type = body.type ?? 'update';
+    if (!['update', 'draft', 'schedule', 'now'].includes(type)) {
+      return { success: false, message: 'type must be update, draft, schedule or now' };
+    }
+    if (type === 'schedule' && !body.date) {
+      return { success: false, message: 'date is required to schedule' };
+    }
+    const orgId = await this._planSyncService.getOrgIdByFirebaseUid(body.firebaseUid);
+    if (!orgId) return { success: false, message: 'No organization found' };
+
+    let existing: any;
+    try {
+      existing = await this._postsService.getPost(orgId, body.id);
+    } catch {
+      existing = null;
+    }
+    const first = existing?.posts?.[0];
+    if (!first) return { success: false, message: 'Post not found' };
+    if (first.state === 'PUBLISHED' && type !== 'update') {
+      return { success: false, message: 'This post is already published' };
+    }
+
+    const newContent =
+      body.contentHtml ??
+      (typeof body.caption === 'string' ? captionToPostHtml(body.caption) : null);
+    const date =
+      type === 'now'
+        ? new Date().toISOString()
+        : body.date ?? new Date(first.publishDate).toISOString();
+    const { __type, ...settings } = (existing.settings || {}) as Record<string, unknown>;
+    const tags = ((first.tags as { tag?: { name?: string } }[] | undefined) || [])
+      .map((t) => t?.tag?.name)
+      .filter((n): n is string => !!n)
+      .map((n) => ({ value: n, label: n }));
+
+    const postBody = {
+      type,
+      date,
+      shortLink: false,
+      tags,
+      posts: [
+        {
+          integration: { id: existing.integration },
+          settings,
+          value: existing.posts.map((p: any, i: number) => ({
+            id: p.id,
+            content: i === 0 && newContent !== null ? newContent : p.content,
+            delay: p.delay ?? 0,
+            image: p.image ?? [],
+          })),
+        },
+      ],
+    };
+
+    try {
+      const mapped = await this._postsService.mapTypeToPost(postBody as any, orgId);
+      const result = await this._postsService.createPost(orgId, mapped);
+      this.logger.log(`Internal post update ${body.id} (${type}) for org ${orgId}`);
+      return { success: true, type, posts: result };
+    } catch (err: any) {
+      this.logger.error(`Internal post update failed for ${body.id}: ${err?.message}`);
+      return {
+        success: false,
+        message: err?.response?.message ?? err?.message ?? 'Update failed',
+      };
     }
   }
 
