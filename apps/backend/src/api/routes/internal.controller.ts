@@ -475,18 +475,43 @@ export class InternalController {
   @Post('/posts/list')
   async postsList(
     @Headers('x-internal-api-key') apiKey: string,
-    @Body() body: { firebaseUid: string; startDate: string; endDate: string; customer?: string },
+    @Body()
+    body: {
+      firebaseUid: string;
+      startDate: string;
+      endDate: string;
+      customer?: string;
+      /** Attach each post's media (image: [{id, path}]) — for the LetsTok Clients Desk review queue. */
+      includeMedia?: boolean;
+    },
   ) {
     this.assertInternalKey(apiKey);
     if (!body.firebaseUid) return { success: false, message: 'firebaseUid is required' };
     const orgId = await this._planSyncService.getOrgIdByFirebaseUid(body.firebaseUid);
     if (!orgId) return { success: false, message: 'No organization found' };
     try {
-      const posts = await this._postsService.getPosts(orgId, {
+      const posts: any[] = await this._postsService.getPosts(orgId, {
         startDate: body.startDate,
         endDate: body.endDate,
         customer: body.customer,
       } as any);
+      if (body.includeMedia) {
+        // getPosts selects no media; fetch it per post (bounded, newest first).
+        const ids = posts.map((p) => p.id).slice(0, 60);
+        const media = new Map<string, any[]>();
+        await Promise.all(
+          ids.map(async (id) => {
+            try {
+              const full = await this._postsService.getPost(orgId, id);
+              const first = full?.posts?.find((x: any) => x.id === id) || full?.posts?.[0];
+              if (first) media.set(id, Array.isArray(first.image) ? first.image : []);
+            } catch {
+              /* leave media empty for this post */
+            }
+          }),
+        );
+        for (const p of posts) if (media.has(p.id)) p.image = media.get(p.id);
+      }
       return { success: true, posts };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Failed to list posts' };
