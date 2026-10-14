@@ -119,7 +119,7 @@ export async function postWorkflowV101({
       'info'
     );
     await sendAdminNotification(
-      `[Postiz] Post Failed: ${post.integration?.providerIdentifier} needs reconnection`,
+      `[Letspost] Post Failed: ${post.integration?.providerIdentifier} needs reconnection`,
       `<p>Post failed for org <b>${post.organizationId}</b> on <b>${post.integration?.providerIdentifier}</b> channel <b>${post.integration?.name}</b>.</p><p>Reason: Channel needs reconnection.</p>`
     ).catch(() => {});
     return;
@@ -137,7 +137,7 @@ export async function postWorkflowV101({
       'info'
     );
     await sendAdminNotification(
-      `[Postiz] Post Failed: ${post.integration?.providerIdentifier} is disabled`,
+      `[Letspost] Post Failed: ${post.integration?.providerIdentifier} is disabled`,
       `<p>Post failed for org <b>${post.organizationId}</b> on <b>${post.integration?.providerIdentifier}</b> channel <b>${post.integration?.name}</b>.</p><p>Reason: Channel is disabled.</p>`
     ).catch(() => {});
     return;
@@ -259,7 +259,7 @@ export async function postWorkflowV101({
             'fail'
           );
           await sendAdminNotification(
-            `[Postiz] Post Error: ${post.integration?.providerIdentifier}`,
+            `[Letspost] Post Error: ${post.integration?.providerIdentifier}`,
             `<p>Post failed for org <b>${post.organizationId}</b> on <b>${post.integration?.providerIdentifier}</b> channel <b>${post.integration?.name}</b>.</p><p>Error: ${err?.cause?.message || 'bad_body'}</p>`
           ).catch(() => {});
           return false;
@@ -274,7 +274,7 @@ export async function postWorkflowV101({
         'All retries exhausted without success'
       );
       await sendAdminNotification(
-        `[Postiz] Post Failed: ${post.integration?.providerIdentifier} (retries exhausted)`,
+        `[Letspost] Post Failed: ${post.integration?.providerIdentifier} (retries exhausted)`,
         `<p>Post failed for org <b>${post.organizationId}</b> on <b>${post.integration?.providerIdentifier}</b> channel <b>${post.integration?.name}</b>.</p><p>Reason: All retries exhausted without success.</p>`
       ).catch(() => {});
       return false;

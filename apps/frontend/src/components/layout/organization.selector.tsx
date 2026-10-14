@@ -68,7 +68,7 @@ export const OrganizationSelector: FC<{ asOpenSelect?: boolean }> = ({
           {data?.length > 1 && (
             <div
               className={clsx(
-                'hidden py-[12px] px-[12px] group-hover:flex absolute top-[100%] end-0 bg-third border-tableBorder border gap-[12px] cursor-pointer flex-col',
+                'hidden py-[12px] px-[12px] group-hover:flex absolute top-[100%] end-0 z-50 max-h-[min(70vh,480px)] overflow-y-auto bg-third border-tableBorder border gap-[12px] cursor-pointer flex-col shadow-lg whitespace-nowrap',
                 asOpenSelect ? '!flex !relative max-w-[500px] mx-auto mb-[10px]' : '',
               )}
             >

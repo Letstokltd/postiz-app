@@ -62,6 +62,8 @@ export const LetstokLaunchesDeepLink = ({
 
   useEffect(() => {
     if (handledRef.current) return;
+    // Org switch reloads this page; wait so Add Channel opens on the owner's org.
+    if (searchParams.get('preferOwnOrg') === '1') return;
 
     /**
      * sessionStorage is the primary channel because the firebase-callback
