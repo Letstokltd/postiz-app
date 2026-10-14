@@ -5,6 +5,7 @@ import { OrganizationRepository } from '@gitroom/nestjs-libraries/database/prism
 import { TemporalService } from 'nestjs-temporal-core';
 import { TypedSearchAttributes } from '@temporalio/common';
 import { organizationId } from '@gitroom/nestjs-libraries/temporal/temporal.search.attribute';
+import { Role } from '@prisma/client';
 
 export type NotificationType = 'success' | 'fail' | 'info';
 
@@ -85,7 +86,11 @@ export class NotificationService {
     type?: NotificationType
   ) {
     const userOrg = await this._organizationRepository.getAllUsersOrgs(orgId);
-    for (const user of userOrg?.users || []) {
+    // Delegated Letstok managers are ADMIN on a customer's org. Channel and
+    // post mail goes only to the account owner (SUPERADMIN).
+    for (const user of (userOrg?.users || []).filter(
+      (member) => member.role === Role.SUPERADMIN
+    )) {
       // 'info' type is always sent regardless of preferences
       if (type !== 'info') {
         // Filter users based on their email preferences

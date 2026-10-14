@@ -198,7 +198,7 @@ export class NoAuthIntegrationsController {
     if (error) {
       this._notificationService
         .sendAdminNotification(
-          `[Postiz] Channel Connection Error: ${integration}`,
+          `[Letspost] Channel Connection Error: ${integration}`,
           `<p>Organization <b>${org.name}</b> failed to connect <b>${integration}</b>.</p><p>Error: ${error}</p><p>Time: ${new Date().toISOString()}</p>`
         )
         .catch(() => {});
@@ -208,7 +208,7 @@ export class NoAuthIntegrationsController {
     if (!id) {
       this._notificationService
         .sendAdminNotification(
-          `[Postiz] Channel Connection Error: ${integration}`,
+          `[Letspost] Channel Connection Error: ${integration}`,
           `<p>Organization <b>${org.name}</b> failed to connect <b>${integration}</b>.</p><p>Error: Invalid API key</p><p>Time: ${new Date().toISOString()}</p>`
         )
         .catch(() => {});
@@ -279,7 +279,7 @@ export class NoAuthIntegrationsController {
 
     this._notificationService
       .sendAdminNotification(
-        `[Postiz] Channel Connected: ${integration}`,
+        `[Letspost] Channel Connected: ${integration}`,
         `<p>Organization <b>${org.name}</b> connected a <b>${integration}</b> channel (<b>${validName}</b>).</p><p>Time: ${new Date().toISOString()}</p>`
       )
       .catch(() => {});
@@ -372,7 +372,7 @@ export class NoAuthIntegrationsController {
 
     this._notificationService
       .sendAdminNotification(
-        `[Postiz] Channel Page Selected`,
+        `[Letspost] Channel Page Selected`,
         `<p>Organization <b>${org.name}</b> completed a two-step channel connection (provider page/company selected).</p><p>Time: ${new Date().toISOString()}</p>`
       )
       .catch(() => {});

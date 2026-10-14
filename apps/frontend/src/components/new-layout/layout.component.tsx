@@ -1,6 +1,6 @@
 'use client';
 
-import React, { ReactNode, useCallback, useEffect, useState } from 'react';
+import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Logo } from '@gitroom/frontend/components/new-layout/logo';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 const ModeComponent = dynamic(
@@ -275,6 +275,44 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
     refreshWhenOffline: false,
     refreshWhenHidden: false,
   });
+  const preferOwnOrgHandled = useRef(false);
+
+  useEffect(() => {
+    if (!user || preferOwnOrgHandled.current) return;
+    if (searchParams.get('preferOwnOrg') !== '1') return;
+    preferOwnOrgHandled.current = true;
+
+    const stripPreferOwnOrg = () => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('preferOwnOrg');
+      const query = params.toString();
+      return `${window.location.pathname}${query ? `?${query}` : ''}${
+        window.location.hash
+      }`;
+    };
+
+    void (async () => {
+      const orgs = await (await fetch('/user/organizations')).json();
+      const owned = (Array.isArray(orgs) ? orgs : [])
+        .filter((org: any) => org?.users?.[0]?.role === 'SUPERADMIN')
+        .sort(
+          (a: any, b: any) =>
+            new Date(a?.users?.[0]?.createdAt || 0).getTime() -
+            new Date(b?.users?.[0]?.createdAt || 0).getTime()
+        );
+      const own = owned[0];
+      const next = stripPreferOwnOrg();
+      if (own?.id && own.id !== user.orgId) {
+        await fetch('/user/change-org', {
+          method: 'POST',
+          body: JSON.stringify({ id: own.id }),
+        });
+        window.location.href = next;
+        return;
+      }
+      window.history.replaceState(null, '', next);
+    })();
+  }, [user, searchParams, fetch]);
 
   if (!user) return null;
 
@@ -322,8 +360,8 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                       </div>
                     </div>
                   </div>
-                  <div className="flex-1 bg-newBgLineColor rounded-[12px] overflow-hidden flex flex-col gap-[1px] blurMe">
-                    <div className="flex bg-newBgColorInner h-[80px] px-[20px] items-center">
+                  <div className="flex-1 bg-newBgLineColor rounded-[12px] flex flex-col gap-[1px] blurMe">
+                    <div className="flex bg-newBgColorInner h-[80px] px-[20px] items-center relative z-30">
                       <div className="text-[24px] font-[600] flex flex-1">
                         <Title />
                       </div>
@@ -367,7 +405,9 @@ export const LayoutComponent = ({ children }: { children: ReactNode }) => {
                         <NotificationComponent />
                       </div>
                     </div>
-                    <div className="flex flex-1 gap-[1px]">{children}</div>
+                    <div className="flex flex-1 gap-[1px] min-h-0 overflow-hidden">
+                      {children}
+                    </div>
                     <div className="flex bg-newBgColorInner px-[20px] py-[10px] items-center justify-center gap-[16px] text-[12px] text-textItemBlur">
                       <a
                         href="/privacy-terms"

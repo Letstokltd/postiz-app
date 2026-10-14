@@ -172,6 +172,7 @@ export class OrganizationRepository {
           select: {
             disabled: true,
             role: true,
+            createdAt: true,
           },
         },
         subscription: {
@@ -350,6 +351,7 @@ export class OrganizationRepository {
       select: {
         users: {
           select: {
+            role: true,
             user: {
               select: {
                 email: true,

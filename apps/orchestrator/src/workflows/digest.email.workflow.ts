@@ -41,6 +41,11 @@ export async function digestEmailWorkflow({
     const org = await getUserOrgs(organizationId);
 
     for (const user of org.users) {
+      // Account owner only. ADMIN members are delegated managers and should
+      // not receive the customer's post notifications.
+      if (user.role !== 'SUPERADMIN') {
+        continue;
+      }
       const allowFailure = user.user.sendFailureEmails ? 'fail' : null;
       const allowSuccess = user.user.sendSuccessEmails ? 'success' : null;
 
@@ -57,7 +62,7 @@ export async function digestEmailWorkflow({
         user.user.email,
         toSend.length === 1
           ? toSend[0].title
-          : `[Postiz] Your latest notifications`,
+          : `[Letspost] Your latest notifications`,
         toSend.map((p) => p.message).join('<br/>'),
         'bottom'
       );
