@@ -41,6 +41,21 @@ export class NoAuthIntegrationsController {
     return this._integrationManager.getAllIntegrations();
   }
 
+  /**
+   * LetsTok connect pages (A.1): where to send the customer back after a
+   * FAILED connection. Success already returns `returnURL` from
+   * social-connect; on errors the callback page asks here. Public on purpose
+   * (path is under /integrations/social-connect so PoliciesGuard lets it
+   * through): the state is an unguessable OAuth state, and the value is a
+   * LetsTok URL validated when the connect link was created.
+   */
+  @Get('/social-connect-return/:state')
+  async socialConnectReturn(@Param('state') state: string) {
+    if (!state) return {};
+    const returnURL = await ioRedis.get(`connect-return:${state}`);
+    return returnURL ? { returnURL } : {};
+  }
+
   @Post('/social-connect/:integration')
   @CheckPolicies([AuthorizationActions.Create, Sections.CHANNEL])
   @UseFilters(new NotEnoughScopesFilter())
@@ -326,6 +341,7 @@ export class NoAuthIntegrationsController {
     if (returnURL) {
       await ioRedis.del(`redirect:${body.state}`);
     }
+    await ioRedis.del(`connect-return:${body.state}`);
 
     const extensionToken = integrationProvider.isChromeExtension
       ? AuthService.signJWT({

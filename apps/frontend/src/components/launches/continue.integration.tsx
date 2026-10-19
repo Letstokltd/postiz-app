@@ -23,6 +23,22 @@ interface SuccessState {
   message: string;
 }
 
+/** Append params to a URL that may already have a query string. */
+function withParams(url: string, params: URLSearchParams): string {
+  const qs = params.toString();
+  if (!qs) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}${qs}`;
+}
+
+/** Absolute URLs (e.g. letstok.com connect pages) get a full navigation. */
+function goTo(url: string, push: (href: string) => void) {
+  if (/^https?:\/\//i.test(url) && typeof window !== 'undefined') {
+    window.location.assign(url);
+    return;
+  }
+  push(url);
+}
+
 export const ContinueIntegration: FC<{
   provider: string;
   searchParams: any;
@@ -47,9 +63,14 @@ export const ContinueIntegration: FC<{
       successMessage: string
     ) => {
       if (returnURL) {
-        // If returnURL exists, always redirect to it with the path params
-        const params = path.includes('?') ? path.split('?')[1] : '';
-        push(params ? `${returnURL}?${params}` : returnURL);
+        // If returnURL exists, always redirect to it with the path params.
+        // A successful connection also gets connected=<provider>, which the
+        // LetsTok connect pages (letstok.com/<lang>/connect/<token>) read.
+        const params = new URLSearchParams(
+          path.includes('?') ? path.split('?')[1] : ''
+        );
+        if (params.has('added')) params.set('connected', provider);
+        goTo(withParams(returnURL, params), push);
       } else if (logged) {
         // If logged in without returnURL, use normal navigation
         push(path);
@@ -58,7 +79,37 @@ export const ContinueIntegration: FC<{
         setSuccessState({ message: successMessage });
       }
     },
-    [logged, push]
+    [logged, push, provider]
+  );
+
+  // Failed connection started from a LetsTok connect page: send the customer
+  // back there with ?error=<provider> instead of a dead-end error screen.
+  const failOrReturn = useCallback(
+    async (message: string) => {
+      const state = modifiedParams?.state;
+      if (state) {
+        try {
+          const res = await fetch(
+            `/integrations/social-connect-return/${encodeURIComponent(state)}`
+          );
+          const { returnURL } = await res.json().catch(() => ({}));
+          if (returnURL) {
+            goTo(
+              withParams(returnURL, new URLSearchParams({ error: provider })),
+              push
+            );
+            return;
+          }
+        } catch {
+          // fall through to the inline error
+        }
+      }
+      setErrorMessage(message);
+      setError(true);
+    },
+    // modifiedParams is memoised once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fetch, provider, push]
   );
   const modifiedParams = useMemo(() => {
     if (provider === 'x') {
@@ -126,8 +177,9 @@ export const ContinueIntegration: FC<{
         data.status !== HttpStatusCode.Created
       ) {
         const errorData = await data.json().catch(() => ({}));
-        setErrorMessage(errorData.message || errorData.msg || 'Could not add provider');
-        setError(true);
+        await failOrReturn(
+          errorData.message || errorData.msg || 'Could not add provider'
+        );
         return;
       }
 
@@ -206,10 +258,9 @@ export const ContinueIntegration: FC<{
           response.status !== HttpStatusCode.Created
         ) {
           const errorData = await response.json().catch(() => ({}));
-          setErrorMessage(
+          await failOrReturn(
             errorData.message || 'Failed to save channel configuration'
           );
-          setError(true);
           return;
         }
 
@@ -224,7 +275,7 @@ export const ContinueIntegration: FC<{
         setIsSaving(false);
       }
     },
-    [twoStepState, fetch, modifiedParams, provider, navigateOrShow]
+    [twoStepState, fetch, modifiedParams, provider, navigateOrShow, failOrReturn]
   );
 
   const Provider = useMemo(() => {
