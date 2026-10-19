@@ -481,6 +481,14 @@ export class InstagramProvider
                 ? `video_url=${encodeURIComponent(mediaPath)}&media_type=STORIES`
                 : `video_url=${encodeURIComponent(mediaPath)}&media_type=REELS&thumb_offset=${
                     m?.thumbnailTimestamp || 0
+                  }${
+                    // Explicit cover image (LetsTok picks a non-black frame).
+                    // cover_url wins over thumb_offset on Instagram Reels.
+                    m?.thumbnail && /^https?:\/\//i.test(m.thumbnail)
+                      ? `&cover_url=${encodeURIComponent(
+                          rewriteExternalMediaUrl(m.thumbnail)
+                        )}`
+                      : ``
                   }`
               : isStory
               ? `video_url=${encodeURIComponent(mediaPath)}&media_type=STORIES`
