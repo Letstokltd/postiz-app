@@ -77,6 +77,13 @@ interface InternalPublishBody {
   mediaUrl?: string;
   /** Existing media id in the org's library (e.g. from /upload-from-url). */
   mediaId?: string;
+  /**
+   * Video cover image (public URL). Becomes the Reel cover on Instagram
+   * (cover_url) and is kept on the post so previews can show it as a poster.
+   */
+  thumbnailUrl?: string;
+  /** Cover frame offset in milliseconds (IG thumb_offset / TikTok video_cover_timestamp_ms). */
+  thumbnailTimestamp?: number;
   caption?: string;
   contentHtml?: string;
   type?: 'now' | 'schedule' | 'draft';
@@ -404,7 +411,12 @@ export class InternalController {
     }
 
     // Resolve the media: an existing library id, or import from URL.
-    let media: { id: string; path: string };
+    let media: {
+      id: string;
+      path: string;
+      thumbnail?: string | null;
+      thumbnailTimestamp?: number | null;
+    };
     if (body.mediaId) {
       const existing = await this._mediaService.getMediaById(body.mediaId);
       if (!existing || existing.organizationId !== orgId || existing.deletedAt) {
@@ -413,7 +425,12 @@ export class InternalController {
           message: `Media ${body.mediaId} not found in this account's library`,
         };
       }
-      media = { id: existing.id, path: existing.path };
+      media = {
+        id: existing.id,
+        path: existing.path,
+        thumbnail: (existing as any).thumbnail ?? null,
+        thumbnailTimestamp: (existing as any).thumbnailTimestamp ?? null,
+      };
     } else {
       try {
         media = (await this._mediaService.importFromUrl(
@@ -430,6 +447,19 @@ export class InternalController {
         };
       }
     }
+
+    // Cover for video posts: caller-supplied wins, else what the library has.
+    const thumbnail =
+      (typeof body.thumbnailUrl === 'string' &&
+      /^https?:\/\//i.test(body.thumbnailUrl)
+        ? body.thumbnailUrl
+        : media.thumbnail) || undefined;
+    const thumbnailTimestamp =
+      typeof body.thumbnailTimestamp === 'number' &&
+      Number.isFinite(body.thumbnailTimestamp) &&
+      body.thumbnailTimestamp >= 0
+        ? Math.round(body.thumbnailTimestamp)
+        : media.thumbnailTimestamp ?? undefined;
 
     const type = body.type ?? 'now';
     const date = body.date ?? new Date().toISOString();
@@ -449,7 +479,14 @@ export class InternalController {
             content: contentHtml,
             id: makeId(10),
             delay: 0,
-            image: [{ id: makeId(10), path: media.path }],
+            image: [
+              {
+                id: makeId(10),
+                path: media.path,
+                ...(thumbnail ? { thumbnail } : {}),
+                ...(thumbnailTimestamp != null ? { thumbnailTimestamp } : {}),
+              },
+            ],
           },
         ],
       })),
