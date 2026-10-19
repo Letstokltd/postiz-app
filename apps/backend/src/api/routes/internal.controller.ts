@@ -25,6 +25,30 @@ function makeId(len: number): string {
   return out;
 }
 
+/**
+ * Where a customer may be sent back after connecting a channel from a LetsTok
+ * connect page. Default letstok.com; extra prefixes in
+ * PUBLIC_RETURN_URL_PREFIXES (comma separated, full https prefixes).
+ */
+function isAllowedReturnUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:') return false;
+  const prefixes = [
+    'https://letstok.com/',
+    'https://www.letstok.com/',
+    ...String(process.env.PUBLIC_RETURN_URL_PREFIXES || '')
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean),
+  ];
+  return prefixes.some((p) => url.startsWith(p));
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -79,6 +103,34 @@ export class InternalController {
     const expectedKey = process.env.INTERNAL_API_KEY;
     if (!expectedKey || !apiKey || apiKey !== expectedKey) {
       throw new UnauthorizedException('Invalid or missing internal API key');
+    }
+  }
+
+  /**
+   * LetsTok managed-service onboarding (A.1): create the customer's LetsTok
+   * Social user + org server-side, so connect links, publishing and the
+   * Clients Desk work before (or without) the customer ever opening Social.
+   * Idempotent; a later Firebase SSO by the same person lands in this org.
+   */
+  @Post('/provision')
+  async provision(
+    @Headers('x-internal-api-key') apiKey: string,
+    @Body()
+    body: { firebaseUid: string; email: string; name?: string; company?: string }
+  ) {
+    this.assertInternalKey(apiKey);
+    if (!body?.firebaseUid?.trim() || !body?.email?.trim()) {
+      return { success: false, message: 'firebaseUid and email are required' };
+    }
+    try {
+      const result = await this._planSyncService.provisionFirebaseOrg(body);
+      this.logger.log(
+        `Provision firebaseUid=${body.firebaseUid} → org ${result.orgId} (created=${result.created}, userCreated=${result.userCreated})`
+      );
+      return { success: true, ...result };
+    } catch (err: any) {
+      this.logger.error(`provision failed for ${body.firebaseUid}: ${err?.message}`);
+      return { success: false, message: err?.message ?? 'Provision failed' };
     }
   }
 
@@ -428,7 +480,7 @@ export class InternalController {
   @Post('/connect-url')
   async connectUrl(
     @Headers('x-internal-api-key') apiKey: string,
-    @Body() body: { firebaseUid: string; integration: string },
+    @Body() body: { firebaseUid: string; integration: string; returnUrl?: string },
   ) {
     this.assertInternalKey(apiKey);
     if (!body.firebaseUid || !body.integration) {
@@ -439,11 +491,26 @@ export class InternalController {
     if (!this._integrationManager.getAllowedSocialsIntegrations().includes(body.integration)) {
       return { success: false, message: `Integration "${body.integration}" is not allowed` };
     }
+    let returnUrl: string | undefined;
+    if (body.returnUrl) {
+      if (!isAllowedReturnUrl(body.returnUrl)) {
+        return { success: false, message: 'returnUrl is not on an allowed domain' };
+      }
+      returnUrl = body.returnUrl;
+    }
     try {
       const provider = this._integrationManager.getSocialIntegration(body.integration);
       const { codeVerifier, state, url } = await (provider as any).generateAuthUrl();
       await ioRedis.set(`organization:${state}`, orgId, 'EX', 3600);
       await ioRedis.set(`login:${state}`, codeVerifier, 'EX', 3600);
+      if (returnUrl) {
+        // `redirect:` is the existing public-flow key: the no-auth callback
+        // returns it as returnURL and the callback page redirects there.
+        // `connect-return:` survives a failed connection so the callback
+        // page can still send the customer back with ?error=<network>.
+        await ioRedis.set(`redirect:${state}`, returnUrl, 'EX', 3600);
+        await ioRedis.set(`connect-return:${state}`, returnUrl, 'EX', 3600);
+      }
       return { success: true, url, state };
     } catch (err: any) {
       this.logger.error(`connect-url failed for ${body.firebaseUid}: ${err?.message}`);
