@@ -636,4 +636,22 @@ export class FacebookProvider extends SocialAbstract implements SocialProvider {
       return [];
     }
   }
+
+  /** LetsTok: delete a published Page post / video / Reel from Facebook. */
+  async deletePublished(accessToken: string, releaseId: string) {
+    const res = await fetch(
+      `https://graph.facebook.com/v20.0/${encodeURIComponent(
+        releaseId
+      )}?access_token=${accessToken}`,
+      { method: 'DELETE' }
+    );
+    const json: any = await res.json().catch(() => ({}));
+    if (!res.ok || json?.success === false || json?.error) {
+      throw new Error(
+        `Facebook refused the delete: ${
+          json?.error?.message || res.statusText || res.status
+        }`
+      );
+    }
+  }
 }

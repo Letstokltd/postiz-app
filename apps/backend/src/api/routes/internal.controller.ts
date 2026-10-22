@@ -14,6 +14,49 @@ import { PostsService } from '@gitroom/nestjs-libraries/database/prisma/posts/po
 import { MediaService } from '@gitroom/nestjs-libraries/database/prisma/media/media.service';
 import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
 import { ioRedis } from '@gitroom/nestjs-libraries/redis/redis.service';
+import { RefreshIntegrationService } from '@gitroom/nestjs-libraries/integrations/refresh.integration.service';
+import { createHash } from 'crypto';
+
+/**
+ * Publish idempotency window. A repeated /publish for the same channel +
+ * media + caption inside this window returns the post that already exists
+ * instead of publishing a second public copy (callers that time out and
+ * retry used to create 2-4 copies). INTERNAL_PUBLISH_DEDUPE_SECONDS=0 turns
+ * it off; a caller can bypass it per request with allowDuplicate:true.
+ */
+const PUBLISH_DEDUPE_SECONDS = Number(
+  process.env.INTERNAL_PUBLISH_DEDUPE_SECONDS ?? 6 * 60 * 60
+);
+/** How long an in-flight claim blocks retries if the process dies mid-publish. */
+const PUBLISH_PENDING_SECONDS = 15 * 60;
+
+/** Networks whose API does not allow apps to delete a published post. */
+const NETWORK_DELETE_HINT: Record<string, string> = {
+  'instagram-standalone':
+    'Instagram channels connected with Instagram Login cannot be deleted through the API (only Facebook-Login Instagram channels can). Delete it in the Instagram app.',
+  tiktok:
+    'TikTok does not let apps delete published videos. Delete it in the TikTok app.',
+};
+
+function publishDedupeKey(
+  orgId: string,
+  channel: InternalPublishChannel,
+  body: InternalPublishBody
+): string {
+  const settings = (channel.settings || {}) as Record<string, unknown>;
+  const raw = JSON.stringify([
+    orgId,
+    channel.integrationId,
+    body.mediaId || body.mediaUrl || '',
+    (body.contentHtml ?? body.caption ?? '').trim(),
+    body.type ?? 'now',
+    (body.type ?? 'now') === 'schedule' ? body.date ?? '' : '',
+    settings.post_type ?? '',
+  ]);
+  return `internal-publish:dedupe:${createHash('sha256')
+    .update(raw)
+    .digest('hex')}`;
+}
 
 /** Random id for post/value/image blocks (mirrors the frontend publish client). */
 function makeId(len: number): string {
@@ -90,6 +133,8 @@ interface InternalPublishBody {
   date?: string;
   shortLink?: boolean;
   channels: InternalPublishChannel[];
+  /** Skip the idempotency check (the user really wants the same post twice). */
+  allowDuplicate?: boolean;
 }
 
 @Controller('/api/internal')
@@ -104,7 +149,66 @@ export class InternalController {
     private _postsService: PostsService,
     private _mediaService: MediaService,
     private _integrationManager: IntegrationManager,
+    private _refreshIntegrationService: RefreshIntegrationService,
   ) {}
+
+  /**
+   * Claim the idempotency key for one channel of a publish request.
+   * Returns null when this request may publish, or the post that already
+   * exists / is still being created for the same content.
+   */
+  private async claimPublishKey(
+    key: string,
+    orgId: string
+  ): Promise<
+    | null
+    | { postId: string | null; inProgress?: boolean; state?: string; releaseURL?: string | null }
+  > {
+    try {
+      const existing = await ioRedis.get(key);
+      if (existing) {
+        const rec = JSON.parse(existing) as { postId?: string };
+        if (!rec?.postId) return { postId: null, inProgress: true };
+        const chain = await this._postsService
+          .getPostsRecursively(rec.postId, false, orgId, true)
+          .catch(() => [] as any[]);
+        const root: any = chain?.[0];
+        // The earlier copy was deleted or failed: allow a fresh publish.
+        if (!root || root.state === 'ERROR') {
+          await ioRedis.set(
+            key,
+            JSON.stringify({ state: 'pending', at: Date.now() }),
+            'EX',
+            PUBLISH_PENDING_SECONDS
+          );
+          return null;
+        }
+        return {
+          postId: rec.postId,
+          state: root.state,
+          releaseURL: root.releaseURL ?? null,
+        };
+      }
+      const ok = await ioRedis.set(
+        key,
+        JSON.stringify({ state: 'pending', at: Date.now() }),
+        'EX',
+        PUBLISH_PENDING_SECONDS,
+        'NX'
+      );
+      // Another request for the same content claimed it a moment ago.
+      if (ok !== 'OK') return { postId: null, inProgress: true };
+      return null;
+    } catch (err: any) {
+      // Redis trouble must never block posting.
+      this.logger.warn(`Publish dedupe check skipped: ${err?.message}`);
+      return null;
+    }
+  }
+
+  private async releasePublishKeys(keys: string[]): Promise<void> {
+    await Promise.all(keys.map((k) => ioRedis.del(k).catch(() => 0)));
+  }
 
   private assertInternalKey(apiKey: string): void {
     const expectedKey = process.env.INTERNAL_API_KEY;
@@ -410,6 +514,47 @@ export class InternalController {
       };
     }
 
+    // Idempotency: one public copy per channel + media + caption, however
+    // many times a caller retries (e.g. after its own HTTP timeout).
+    const reused: Record<string, unknown>[] = [];
+    const keyByIntegration = new Map<string, string>();
+    let channelsToCreate = body.channels;
+    if (!body.allowDuplicate && PUBLISH_DEDUPE_SECONDS > 0) {
+      channelsToCreate = [];
+      for (const c of body.channels) {
+        const key = publishDedupeKey(orgId, c, body);
+        const hit = await this.claimPublishKey(key, orgId);
+        if (hit) {
+          reused.push({
+            postId: hit.postId,
+            integration: c.integrationId,
+            duplicate: true,
+            ...(hit.inProgress ? { inProgress: true } : {}),
+            ...(hit.state ? { state: hit.state } : {}),
+            ...(hit.releaseURL ? { releaseURL: hit.releaseURL } : {}),
+          });
+        } else {
+          keyByIntegration.set(c.integrationId, key);
+          channelsToCreate.push(c);
+        }
+      }
+      if (reused.length) {
+        this.logger.warn(
+          `Internal publish: ${reused.length} duplicate channel request(s) skipped for org ${orgId}`
+        );
+      }
+      if (!channelsToCreate.length) {
+        return {
+          success: true,
+          duplicate: true,
+          posts: reused,
+          message:
+            'This exact post was already sent to these channels, so nothing new was published. Use the existing post ids (check get_post_publish_status). Pass allowDuplicate:true only if the user really wants a second copy.',
+        };
+      }
+    }
+    const claimedKeys = [...keyByIntegration.values()];
+
     // Resolve the media: an existing library id, or import from URL.
     let media: {
       id: string;
@@ -420,6 +565,7 @@ export class InternalController {
     if (body.mediaId) {
       const existing = await this._mediaService.getMediaById(body.mediaId);
       if (!existing || existing.organizationId !== orgId || existing.deletedAt) {
+        await this.releasePublishKeys(claimedKeys);
         return {
           success: false,
           message: `Media ${body.mediaId} not found in this account's library`,
@@ -441,6 +587,7 @@ export class InternalController {
         this.logger.error(
           `Internal publish media import failed for ${body.firebaseUid}: ${err?.message}`
         );
+        await this.releasePublishKeys(claimedKeys);
         return {
           success: false,
           message: `Media import failed: ${err?.message ?? 'unknown error'}`,
@@ -471,7 +618,7 @@ export class InternalController {
       date,
       shortLink: body.shortLink ?? false,
       tags: [] as { value: string; label: string }[],
-      posts: body.channels.map((c) => ({
+      posts: channelsToCreate.map((c) => ({
         integration: { id: c.integrationId },
         settings: c.settings ?? {},
         value: [
@@ -501,11 +648,30 @@ export class InternalController {
       this.logger.log(
         `Internal publish created ${result.length} post(s) for org ${orgId} (firebaseUid: ${body.firebaseUid})`
       );
-      return { success: true, posts: result };
+      await Promise.all(
+        (result as { postId?: string; integration?: string }[]).map((p) => {
+          const key = p.integration && keyByIntegration.get(p.integration);
+          if (!key || !p.postId) return Promise.resolve();
+          return ioRedis
+            .set(key, JSON.stringify({ postId: p.postId }), 'EX', PUBLISH_DEDUPE_SECONDS)
+            .catch(() => undefined);
+        })
+      );
+      return {
+        success: true,
+        posts: [...result, ...reused],
+        ...(reused.length
+          ? {
+              message:
+                'Some channels already had this exact post, so they were not published again (marked duplicate:true).',
+            }
+          : {}),
+      };
     } catch (err: any) {
       this.logger.error(
         `Internal publish failed for ${body.firebaseUid}: ${err?.message}`
       );
+      await this.releasePublishKeys(claimedKeys);
       return {
         success: false,
         message: err?.response?.message ?? err?.message ?? 'Publish failed',
@@ -717,11 +883,23 @@ export class InternalController {
     }
   }
 
-  /** Delete a post (the whole group) by id. */
+  /**
+   * Delete a post by id. scope 'everywhere' (default) removes a published
+   * post from the network itself first, and only then from LetsTok. When the
+   * network does not allow it (or refuses), the LetsTok record is KEPT so the
+   * live link stays findable, and the reply says to delete it by hand.
+   * scope 'letstok_only' removes just the LetsTok record (old behaviour).
+   * Unpublished posts (draft / queued / error) are simply cancelled.
+   */
   @Post('/posts/delete')
   async postsDelete(
     @Headers('x-internal-api-key') apiKey: string,
-    @Body() body: { firebaseUid: string; id: string },
+    @Body()
+    body: {
+      firebaseUid: string;
+      id: string;
+      scope?: 'everywhere' | 'letstok_only';
+    },
   ) {
     this.assertInternalKey(apiKey);
     if (!body.firebaseUid || !body.id) {
@@ -729,11 +907,90 @@ export class InternalController {
     }
     const orgId = await this._planSyncService.getOrgIdByFirebaseUid(body.firebaseUid);
     if (!orgId) return { success: false, message: 'No organization found' };
+    const scope = body.scope === 'letstok_only' ? 'letstok_only' : 'everywhere';
     try {
-      const post = await this._postsService.getPost(orgId, body.id);
-      if (!post) return { success: false, message: 'Post not found' };
-      await this._postsService.deletePost(orgId, (post as any).group);
-      return { success: true };
+      const chain = (await this._postsService.getPostsRecursively(
+        body.id,
+        true,
+        orgId,
+        true
+      )) as any[];
+      const root = chain?.[0];
+      if (!root) return { success: false, message: 'Post not found' };
+
+      const integration = root.integration;
+      const provider: string = integration?.providerIdentifier ?? '';
+      const releaseURL: string | null = root.releaseURL ?? null;
+      const live = chain.filter((p) => p?.releaseId);
+
+      let removedFromNetwork: boolean | 'not_published' = 'not_published';
+      if (scope === 'everywhere' && live.length) {
+        const social = this._integrationManager.getSocialIntegration(provider);
+        if (!social?.deletePublished) {
+          return {
+            success: false,
+            errorCode: 'NETWORK_DELETE_UNSUPPORTED',
+            provider,
+            releaseURL,
+            removedFromNetwork: false,
+            removedFromLetsTok: false,
+            message:
+              `${
+                NETWORK_DELETE_HINT[provider] ??
+                `${provider || 'This network'} does not let LetsTok delete published posts. Delete it by hand in the app.`
+              } The post is still live${releaseURL ? ` at ${releaseURL}` : ''}. ` +
+              "The LetsTok record was kept so you can find it. After deleting it by hand, call delete_post again with scope 'letstok_only' to remove the record.",
+          };
+        }
+        let accessToken: string = integration.token;
+        if (
+          integration.tokenExpiration &&
+          new Date(integration.tokenExpiration).getTime() < Date.now() + 60_000
+        ) {
+          const refreshed = await this._refreshIntegrationService
+            .refresh(integration)
+            .catch(() => false as const);
+          if (refreshed && refreshed.accessToken) accessToken = refreshed.accessToken;
+        }
+        try {
+          // Thread replies first, then the main post.
+          for (const p of [...live].reverse()) {
+            await social.deletePublished(accessToken, p.releaseId, integration);
+          }
+          removedFromNetwork = true;
+        } catch (err: any) {
+          this.logger.warn(
+            `Network delete failed for post ${body.id} (${provider}): ${err?.message}`
+          );
+          return {
+            success: false,
+            errorCode: 'NETWORK_DELETE_FAILED',
+            provider,
+            releaseURL,
+            removedFromNetwork: false,
+            removedFromLetsTok: false,
+            message:
+              `${err?.message ?? 'The network refused the delete.'} The post is still live${
+                releaseURL ? ` at ${releaseURL}` : ''
+              }. The LetsTok record was kept. Delete it by hand, then call delete_post again with scope 'letstok_only'.`,
+          };
+        }
+      }
+
+      await this._postsService.deletePost(orgId, root.group);
+      return {
+        success: true,
+        provider,
+        releaseURL,
+        removedFromNetwork: scope === 'letstok_only' ? false : removedFromNetwork,
+        removedFromLetsTok: true,
+        message:
+          scope === 'letstok_only'
+            ? `Removed from LetsTok only.${releaseURL ? ` The post itself is still live at ${releaseURL} unless it was deleted by hand.` : ''}`
+            : removedFromNetwork === true
+            ? `Deleted from ${provider} and from LetsTok.`
+            : 'The post was not published yet; it was cancelled and removed from LetsTok.',
+      };
     } catch (err: any) {
       return { success: false, message: err?.message ?? 'Failed to delete post' };
     }

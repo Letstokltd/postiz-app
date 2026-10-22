@@ -715,4 +715,13 @@ export class XProvider extends SocialAbstract implements SocialProvider {
   mentionFormat(idOrHandle: string, name: string) {
     return `@${idOrHandle}`;
   }
+
+  /** LetsTok: delete a published post (tweet) from X. */
+  async deletePublished(accessToken: string, releaseId: string) {
+    const client = await this.getClient(accessToken);
+    const { data } = await client.v2.deleteTweet(releaseId);
+    if (!data?.deleted) {
+      throw new Error('X did not confirm the delete');
+    }
+  }
 }
