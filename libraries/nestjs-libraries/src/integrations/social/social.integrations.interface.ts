@@ -175,4 +175,15 @@ export interface SocialProvider
     accessToken: string,
     data: any
   ): Promise<FetchPageInformationResult>;
+  /**
+   * LetsTok: remove an already-published post from the network itself (not
+   * only from our database). `releaseId` is the platform id saved when the
+   * post went live. Throws with a readable reason when the network refuses.
+   * Providers without this method do not support deleting through their API.
+   */
+  deletePublished?(
+    accessToken: string,
+    releaseId: string,
+    integration: Integration
+  ): Promise<void>;
 }

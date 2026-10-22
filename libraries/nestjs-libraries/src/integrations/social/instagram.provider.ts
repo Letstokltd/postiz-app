@@ -834,4 +834,29 @@ export class InstagramProvider
       return [];
     }
   }
+
+  /**
+   * LetsTok: delete a published post / Reel / Story from Instagram
+   * (DELETE /<IG_MEDIA_ID>, Facebook Login only). Needs the
+   * `instagram_manage_contents` permission, which this app does not request
+   * yet; until it is approved and the account reconnects, Meta refuses and
+   * the caller reports "delete by hand".
+   */
+  async deletePublished(accessToken: string, releaseId: string) {
+    const res = await fetch(
+      `https://graph.facebook.com/v20.0/${encodeURIComponent(
+        releaseId
+      )}?access_token=${accessToken}`,
+      { method: 'DELETE' }
+    );
+    const json: any = await res.json().catch(() => ({}));
+    if (!res.ok || json?.success === false || json?.error) {
+      const msg = json?.error?.message || res.statusText || res.status;
+      throw new Error(
+        /permission|scope|\(#10\)|\(#200\)/i.test(String(msg))
+          ? `Instagram refused the delete: LetsTok does not have the instagram_manage_contents permission for this account yet (${msg}). Delete it in the Instagram app or Meta Business Suite.`
+          : `Instagram refused the delete: ${msg}`
+      );
+    }
+  }
 }

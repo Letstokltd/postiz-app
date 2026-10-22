@@ -557,4 +557,26 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
       return [];
     }
   }
+
+  /**
+   * LetsTok: delete a published video from YouTube. Needs the `youtube` or
+   * `youtube.force-ssl` scope; with only `youtube.upload` Google answers 403
+   * and the caller reports "delete by hand".
+   */
+  async deletePublished(accessToken: string, releaseId: string) {
+    const { client, youtube } = clientAndYoutube();
+    client.setCredentials({ access_token: accessToken });
+    try {
+      await youtube(client).videos.delete({ id: releaseId });
+    } catch (err: any) {
+      const status = err?.code || err?.response?.status;
+      if (status === 404) return;
+      if (status === 403) {
+        throw new Error(
+          'YouTube refused the delete: the connected channel did not grant delete permission (youtube.force-ssl scope)'
+        );
+      }
+      throw new Error(`YouTube refused the delete: ${err?.message || status}`);
+    }
+  }
 }

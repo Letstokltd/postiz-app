@@ -827,4 +827,26 @@ export class LinkedinProvider extends SocialAbstract implements SocialProvider {
   mentionFormat(idOrHandle: string, name: string) {
     return `@[${name.replace('@', '')}](urn:li:organization:${idOrHandle})`;
   }
+
+  /** LetsTok: delete a published LinkedIn post (member or organization). */
+  async deletePublished(accessToken: string, releaseId: string) {
+    const res = await fetch(
+      `https://api.linkedin.com/rest/posts/${encodeURIComponent(releaseId)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          'LinkedIn-Version': '202601',
+          'X-Restli-Protocol-Version': '2.0.0',
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+    // 204 = deleted; 404/410 = already gone.
+    if (!res.ok && res.status !== 404 && res.status !== 410) {
+      const text = await res.text().catch(() => '');
+      throw new Error(
+        `LinkedIn refused the delete (${res.status}): ${text || res.statusText}`
+      );
+    }
+  }
 }
