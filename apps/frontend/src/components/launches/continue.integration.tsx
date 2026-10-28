@@ -424,6 +424,7 @@ export const ContinueIntegration: FC<{
                 existingId={[]}
                 initialData={twoStepState.pages}
                 isSaving={isSaving}
+                autoSaveSingle
               />
             </IntegrationContext.Provider>
           </div>

@@ -1,6 +1,14 @@
 'use client';
 
-import { FC, ReactNode, useCallback, useMemo, useState } from 'react';
+import {
+  FC,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import useSWR from 'swr';
 import clsx from 'clsx';
 import { Button } from '@gitroom/react/form/button';
@@ -22,6 +30,7 @@ export interface ContinueProviderProps {
   existingId: string[];
   initialData?: any[];
   isSaving?: boolean;
+  autoSaveSingle?: boolean;
 }
 
 export interface EmptyStateMessage {
@@ -59,7 +68,8 @@ export function withContinueProvider<TItem, TSelection>(
   } = config;
 
   return function ContinueProviderComponent(props: ContinueProviderProps) {
-    const { onSave, existingId, initialData, isSaving } = props;
+    const { onSave, existingId, initialData, isSaving, autoSaveSingle } =
+      props;
     const call = useCustomProviderFunction();
     const t = useT();
     const [selection, setSelection] = useState<TSelection | null>(null);
@@ -104,6 +114,19 @@ export function withContinueProvider<TItem, TSelection>(
         ) || []
       );
     }, [resolvedData, existingId]);
+
+    const autoSaved = useRef(false);
+    useEffect(() => {
+      if (filteredData.length !== 1 || selection) {
+        return;
+      }
+      const only = getSelectionValue(filteredData[0]);
+      setSelection(only);
+      if (autoSaveSingle && !autoSaved.current) {
+        autoSaved.current = true;
+        onSave(transformSaveData(only));
+      }
+    }, [filteredData, selection, autoSaveSingle, onSave]);
 
     if (!isLoading && !resolvedData?.length) {
       return (
