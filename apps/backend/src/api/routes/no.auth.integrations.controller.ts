@@ -256,6 +256,16 @@ export class NoAuthIntegrationsController {
       throw new HttpException('', 412);
     }
 
+    // Two-step providers (Facebook/Instagram share one Meta login) return the
+    // same user id until a page/account is picked, and the row is unique on
+    // (organizationId, internalId). Key the pending row per provider so an
+    // Instagram login can't overwrite an unfinished Facebook row (or vice
+    // versa). saveProviderPage replaces it with the real page/account id.
+    const isPendingStep = !!integrationProvider.isBetweenSteps && !refresh;
+    const internalId = isPendingStep
+      ? `pending_${integration}_${id}`
+      : String(id);
+
     const createUpdate =
       await this._integrationService.createOrUpdateIntegration(
         additionalSettings,
@@ -264,7 +274,7 @@ export class NoAuthIntegrationsController {
         validName.trim(),
         picture,
         'social',
-        String(id),
+        internalId,
         integration,
         accessToken,
         refreshToken,
