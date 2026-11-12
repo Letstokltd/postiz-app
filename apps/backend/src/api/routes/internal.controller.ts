@@ -47,7 +47,9 @@ function publishDedupeKey(
   const raw = JSON.stringify([
     orgId,
     channel.integrationId,
-    body.mediaId || body.mediaUrl || '',
+    publishMediaItems(body)
+      .map((m) => m.mediaId || m.mediaUrl || '')
+      .join('|'),
     (body.contentHtml ?? body.caption ?? '').trim(),
     body.type ?? 'now',
     (body.type ?? 'now') === 'schedule' ? body.date ?? '' : '',
@@ -114,12 +116,25 @@ interface InternalPublishChannel {
   settings?: Record<string, unknown>;
 }
 
+interface InternalPublishMediaItem {
+  mediaUrl?: string;
+  mediaId?: string;
+}
+
+/** Max items in one post (Instagram carousel limit). */
+const MAX_PUBLISH_MEDIA = 10;
+
 interface InternalPublishBody {
   firebaseUid: string;
   /** Public URL to import into the media library (mutually optional with mediaId). */
   mediaUrl?: string;
   /** Existing media id in the org's library (e.g. from /upload-from-url). */
   mediaId?: string;
+  /**
+   * Several media in one post (Instagram/Facebook carousel, multi-image X,
+   * LinkedIn, Threads...). Takes precedence over mediaUrl/mediaId.
+   */
+  media?: InternalPublishMediaItem[];
   /**
    * Video cover image (public URL). Becomes the Reel cover on Instagram
    * (cover_url) and is kept on the post so previews can show it as a poster.
@@ -135,6 +150,16 @@ interface InternalPublishBody {
   channels: InternalPublishChannel[];
   /** Skip the idempotency check (the user really wants the same post twice). */
   allowDuplicate?: boolean;
+}
+
+function publishMediaItems(
+  body: InternalPublishBody
+): InternalPublishMediaItem[] {
+  const list =
+    Array.isArray(body.media) && body.media.length
+      ? body.media
+      : [{ mediaUrl: body.mediaUrl, mediaId: body.mediaId }];
+  return list.filter((m) => !!(m?.mediaId || m?.mediaUrl));
 }
 
 @Controller('/api/internal')
@@ -468,8 +493,15 @@ export class InternalController {
     if (!body.firebaseUid) {
       return { success: false, message: 'firebaseUid is required' };
     }
-    if (!body.mediaUrl && !body.mediaId) {
+    const mediaItems = publishMediaItems(body);
+    if (!mediaItems.length) {
       return { success: false, message: 'mediaUrl or mediaId is required' };
+    }
+    if (mediaItems.length > MAX_PUBLISH_MEDIA) {
+      return {
+        success: false,
+        message: `A post can have at most ${MAX_PUBLISH_MEDIA} media items`,
+      };
     }
     if (!body.channels?.length) {
       return { success: false, message: 'At least one channel is required' };
@@ -555,58 +587,84 @@ export class InternalController {
     }
     const claimedKeys = [...keyByIntegration.values()];
 
-    // Resolve the media: an existing library id, or import from URL.
-    let media: {
+    // Resolve each media item: an existing library id, or import from URL.
+    type ResolvedMedia = {
       id: string;
       path: string;
       thumbnail?: string | null;
       thumbnailTimestamp?: number | null;
     };
-    if (body.mediaId) {
-      const existing = await this._mediaService.getMediaById(body.mediaId);
-      if (!existing || existing.organizationId !== orgId || existing.deletedAt) {
-        await this.releasePublishKeys(claimedKeys);
-        return {
-          success: false,
-          message: `Media ${body.mediaId} not found in this account's library`,
-        };
-      }
-      media = {
-        id: existing.id,
-        path: existing.path,
-        thumbnail: (existing as any).thumbnail ?? null,
-        thumbnailTimestamp: (existing as any).thumbnailTimestamp ?? null,
-      };
-    } else {
-      try {
-        media = (await this._mediaService.importFromUrl(
-          orgId,
-          body.mediaUrl
-        )) as { id: string; path: string };
-      } catch (err: any) {
-        this.logger.error(
-          `Internal publish media import failed for ${body.firebaseUid}: ${err?.message}`
-        );
-        await this.releasePublishKeys(claimedKeys);
-        return {
-          success: false,
-          message: `Media import failed: ${err?.message ?? 'unknown error'}`,
-        };
+    const medias: ResolvedMedia[] = [];
+    for (const item of mediaItems) {
+      if (item.mediaId) {
+        const existing = await this._mediaService.getMediaById(item.mediaId);
+        if (
+          !existing ||
+          existing.organizationId !== orgId ||
+          existing.deletedAt
+        ) {
+          await this.releasePublishKeys(claimedKeys);
+          return {
+            success: false,
+            message: `Media ${item.mediaId} not found in this account's library`,
+          };
+        }
+        medias.push({
+          id: existing.id,
+          path: existing.path,
+          thumbnail: (existing as any).thumbnail ?? null,
+          thumbnailTimestamp: (existing as any).thumbnailTimestamp ?? null,
+        });
+      } else {
+        try {
+          medias.push(
+            (await this._mediaService.importFromUrl(
+              orgId,
+              item.mediaUrl
+            )) as ResolvedMedia
+          );
+        } catch (err: any) {
+          this.logger.error(
+            `Internal publish media import failed for ${body.firebaseUid}: ${err?.message}`
+          );
+          await this.releasePublishKeys(claimedKeys);
+          return {
+            success: false,
+            message: `Media import failed (${item.mediaUrl}): ${
+              err?.message ?? 'unknown error'
+            }`,
+          };
+        }
       }
     }
 
-    // Cover for video posts: caller-supplied wins, else what the library has.
-    const thumbnail =
-      (typeof body.thumbnailUrl === 'string' &&
+    // Cover for video posts: caller-supplied wins (single-media posts only),
+    // else what the library has for each item.
+    const singleMedia = medias.length === 1;
+    const callerThumbnail =
+      singleMedia &&
+      typeof body.thumbnailUrl === 'string' &&
       /^https?:\/\//i.test(body.thumbnailUrl)
         ? body.thumbnailUrl
-        : media.thumbnail) || undefined;
-    const thumbnailTimestamp =
+        : undefined;
+    const callerThumbnailTimestamp =
+      singleMedia &&
       typeof body.thumbnailTimestamp === 'number' &&
       Number.isFinite(body.thumbnailTimestamp) &&
       body.thumbnailTimestamp >= 0
         ? Math.round(body.thumbnailTimestamp)
-        : media.thumbnailTimestamp ?? undefined;
+        : undefined;
+    const images = medias.map((m) => {
+      const thumbnail = callerThumbnail || m.thumbnail || undefined;
+      const thumbnailTimestamp =
+        callerThumbnailTimestamp ?? m.thumbnailTimestamp ?? undefined;
+      return {
+        id: makeId(10),
+        path: m.path,
+        ...(thumbnail ? { thumbnail } : {}),
+        ...(thumbnailTimestamp != null ? { thumbnailTimestamp } : {}),
+      };
+    });
 
     const type = body.type ?? 'now';
     const date = body.date ?? new Date().toISOString();
@@ -626,14 +684,7 @@ export class InternalController {
             content: contentHtml,
             id: makeId(10),
             delay: 0,
-            image: [
-              {
-                id: makeId(10),
-                path: media.path,
-                ...(thumbnail ? { thumbnail } : {}),
-                ...(thumbnailTimestamp != null ? { thumbnailTimestamp } : {}),
-              },
-            ],
+            image: images,
           },
         ],
       })),

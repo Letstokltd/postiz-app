@@ -106,6 +106,9 @@ export default withProvider<InstagramDto>({
     if ((firstPost?.length ?? 0) > 1 && settings?.post_type === 'story') {
       return 'Stories can only have one media';
     }
+    if ((firstPost?.length ?? 0) > 10) {
+      return 'A carousel can have at most 10 media';
+    }
     if (settings?.is_trial_reel) {
       if ((firstPost?.length ?? 0) > 1) {
         return 'Trial Reels can only have one video';
