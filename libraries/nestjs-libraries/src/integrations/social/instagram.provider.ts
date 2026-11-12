@@ -15,7 +15,7 @@ import { Integration } from '@prisma/client';
 import { Rules } from '@gitroom/nestjs-libraries/chat/rules.description.decorator';
 
 @Rules(
-  "Instagram should have at least one attachment, if it's a story, it can have only one picture"
+  "Instagram should have at least one attachment, if it's a story, it can have only one picture, a carousel post can have at most 10 attachments"
 )
 export class InstagramProvider
   extends SocialAbstract
@@ -465,6 +465,15 @@ export class InstagramProvider
     console.log('in progress', id);
     const isStory = firstPost.settings.post_type === 'story';
     const isTrialReel = !!firstPost.settings.is_trial_reel;
+    const isCarouselPost = (firstPost?.media?.length || 0) > 1;
+    // Meta takes collaborators on the top-level container only (the single
+    // media, or the CAROUSEL parent), never on carousel children.
+    const collaborators =
+      firstPost?.settings?.collaborators?.length && !isStory
+        ? `&collaborators=${encodeURIComponent(
+            JSON.stringify(firstPost.settings.collaborators.map((p) => p.label))
+          )}`
+        : ``;
     const medias = await Promise.all(
       firstPost?.media?.map(async (m) => {
         const mediaPath = rewriteExternalMediaUrl(m.path);
@@ -472,8 +481,7 @@ export class InstagramProvider
           firstPost.media?.length === 1
             ? `&caption=${encodeURIComponent(firstPost.message)}`
             : ``;
-        const isCarousel =
-          (firstPost?.media?.length || 0) > 1 ? `&is_carousel_item=true` : ``;
+        const isCarousel = isCarouselPost ? `&is_carousel_item=true` : ``;
         const mediaType =
           mediaPath.indexOf('.mp4') > -1
             ? firstPost?.media?.length === 1
@@ -508,16 +516,11 @@ export class InstagramProvider
             )}`
           : ``;
 
-        const collaborators =
-          firstPost?.settings?.collaborators?.length && !isStory
-            ? `&collaborators=${JSON.stringify(
-                firstPost?.settings?.collaborators.map((p) => p.label)
-              )}`
-            : ``;
-
         const { id: photoId } = await (
           await this.fetch(
-            `https://${type}/v20.0/${id}/media?${mediaType}${isCarousel}${collaborators}${trialParams}&access_token=${accessToken}${caption}`,
+            `https://${type}/v20.0/${id}/media?${mediaType}${isCarousel}${
+              isCarouselPost ? `` : collaborators
+            }${trialParams}&access_token=${accessToken}${caption}`,
             {
               method: 'POST',
             }
@@ -576,7 +579,7 @@ export class InstagramProvider
             firstPost?.message
           )}&media_type=CAROUSEL&children=${encodeURIComponent(
             medias.join(',')
-          )}&access_token=${accessToken}`,
+          )}${collaborators}&access_token=${accessToken}`,
           {
             method: 'POST',
           }
