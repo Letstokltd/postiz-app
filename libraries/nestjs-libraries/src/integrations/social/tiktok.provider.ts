@@ -544,6 +544,18 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
     // The caption shown in the composer IS the caption sent to TikTok.
     const caption = settings.title || firstPost.message || '';
 
+    // Never request comments the creator turned off in the TikTok app;
+    // TikTok requires honouring creator_info.comment_disabled.
+    let allowComment = !!settings.comment;
+    if (isDirectPost && allowComment) {
+      try {
+        const { commentDisabled } = await this.creatorInfo(accessToken);
+        if (commentDisabled) allowComment = false;
+      } catch {
+        // creator_info is best-effort here; TikTok enforces it server-side.
+      }
+    }
+
     const {
       data: { publish_id },
     } = await (
@@ -570,7 +582,7 @@ export class TiktokProvider extends SocialAbstract implements SocialProvider {
                       : { title: caption.slice(0, 2200) }),
                     privacy_level: settings.privacy_level,
                     disable_duet: !settings.duet,
-                    disable_comment: !settings.comment,
+                    disable_comment: !allowComment,
                     disable_stitch: !settings.stitch,
                     is_aigc: settings.video_made_with_ai || false,
                     brand_content_toggle:
