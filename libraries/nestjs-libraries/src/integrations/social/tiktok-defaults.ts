@@ -42,7 +42,11 @@ export const TIKTOK_SAFE_DEFAULTS: Pick<
   // itself be a UX violation. Validation catches the empty case.
   duet: false,
   stitch: false,
-  comment: false,
+  // API callers that omit `comment` get comments open. The composer always
+  // sends an explicit value (unchecked by default, per TikTok UX rules), so
+  // this only affects programmatic posts. Publish time still turns comments
+  // off when the creator disabled them in the TikTok app.
+  comment: true,
   autoAddMusic: 'no',
   brand_content_toggle: false,
   brand_organic_toggle: false,
