@@ -453,6 +453,56 @@ export class InternalController {
     return { success: true, integrations };
   }
 
+  /**
+   * Remove one connected channel from the user's org (Clients Desk "Remove
+   * channel"). Same as deleting it in the Social UI: its posts are removed from
+   * LetsTok Social and the channel is soft-deleted with its tokens cleared.
+   * Posts already live on the network stay there.
+   */
+  @Post('/integrations/delete')
+  async deleteIntegration(
+    @Headers('x-internal-api-key') apiKey: string,
+    @Body() body: { firebaseUid: string; id: string }
+  ) {
+    this.assertInternalKey(apiKey);
+    if (!body.firebaseUid || !body.id) {
+      return { success: false, message: 'firebaseUid and id are required' };
+    }
+    const orgId = await this._planSyncService.getOrgIdByFirebaseUid(
+      body.firebaseUid
+    );
+    if (!orgId) {
+      return { success: false, message: 'No organization found' };
+    }
+    const list = await this._integrationRepository.getIntegrationsList(orgId);
+    const channel = list.find((i) => i.id === body.id && !i.deletedAt);
+    if (!channel) {
+      return { success: false, message: 'Channel not found on this account' };
+    }
+    const groups = await this._integrationService.getPostsForChannel(
+      orgId,
+      body.id
+    );
+    for (const g of groups) {
+      await this._postsService.deletePost(orgId, g.group).catch((err: any) => {
+        this.logger.warn(
+          `Removing post group ${g.group} of channel ${body.id} failed: ${err?.message}`
+        );
+      });
+    }
+    await this._integrationService.deleteChannel(orgId, body.id);
+    this.logger.log(
+      `Deleted channel ${body.id} (${channel.providerIdentifier}) for org ${orgId}`
+    );
+    return {
+      success: true,
+      id: body.id,
+      name: channel.name,
+      identifier: channel.providerIdentifier,
+      postsRemoved: groups.length,
+    };
+  }
+
   /** Best-effort per-provider caption char limit (null if unknown). */
   private safeMaxLength(identifier: string): number | null {
     try {
